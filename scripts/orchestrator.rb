@@ -37,6 +37,7 @@ unless podcast_name
 end
 
 config = PodcastConfig.new(podcast_name)
+config.load_env!
 config.ensure_directories!
 
 today = Date.today

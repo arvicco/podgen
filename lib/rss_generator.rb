@@ -9,7 +9,7 @@ class RssGenerator
     @logger = logger
     @episodes_dir = episodes_dir
     @feed_path = feed_path
-    @title = podcast_name || ENV.fetch("PODCAST_TITLE", "My Daily Brief")
+    @title = ENV.fetch("PODCAST_TITLE") { podcast_name || "Podcast" }
     @author = ENV.fetch("PODCAST_AUTHOR", "Podcast Agent")
   end
 

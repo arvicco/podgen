@@ -160,7 +160,15 @@ segments: [
 - ffmpeg writes diagnostics to stderr — always capture and log it
 ---
 ## Configuration Files (user-facing)
-Each podcast lives in `podcasts/<name>/` with two files:
+Each podcast lives in `podcasts/<name>/` with these files:
+### podcasts/<name>/.env — per-podcast overrides (optional, gitignored):
+```
+PODCAST_TITLE=My Podcast
+PODCAST_AUTHOR=Author Name
+# Override voice/model for this podcast:
+# ELEVENLABS_VOICE_ID=
+# CLAUDE_MODEL=
+```
 ### podcasts/<name>/guidelines.md — example:
 ```markdown
 # Podcast Guidelines
@@ -190,7 +198,7 @@ topics:
 ```
 ---
 ## Environment Variables
-Document these in .env.example:
+### Root .env — API keys and global defaults:
 ```
 ANTHROPIC_API_KEY=
 ELEVENLABS_API_KEY=
@@ -199,9 +207,17 @@ ELEVENLABS_MODEL_ID=eleven_multilingual_v2
 ELEVENLABS_OUTPUT_FORMAT=mp3_44100_128
 EXA_API_KEY=
 CLAUDE_MODEL=claude-opus-4-6
-PODCAST_TITLE=My Daily Brief
-PODCAST_AUTHOR=
 ```
+### Per-podcast .env — podcasts/<name>/.env overrides (all optional):
+```
+PODCAST_TITLE=
+PODCAST_AUTHOR=
+ELEVENLABS_VOICE_ID=    # use a different voice
+ELEVENLABS_MODEL_ID=    # use a different TTS model
+CLAUDE_MODEL=           # use a different Claude model
+```
+Per-podcast `.env` is loaded via `Dotenv.overload` after the root `.env`, so any
+key set there takes precedence for that podcast's pipeline run.
 ---
 ## Testing Approach
 - Each agent has its own scripts/test_*.rb runner that can be executed in isolation

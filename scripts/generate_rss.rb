@@ -25,6 +25,7 @@ unless podcast_name
 end
 
 config = PodcastConfig.new(podcast_name)
+config.load_env!
 
 puts "=== RSS Feed Generator (#{podcast_name}) ==="
 puts

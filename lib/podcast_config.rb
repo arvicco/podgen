@@ -17,9 +17,19 @@ class PodcastConfig
 
     @guidelines_path = File.join(podcast_dir, "guidelines.md")
     @queue_path      = File.join(podcast_dir, "queue.yml")
+    @env_path        = File.join(podcast_dir, ".env")
     @episodes_dir    = File.join(@root, "output", name, "episodes")
     @feed_path       = File.join(@root, "output", name, "feed.xml")
     @log_dir         = File.join(@root, "logs", name)
+  end
+
+  # Load per-podcast .env overrides on top of root .env.
+  # Must be called after Dotenv.load (root .env).
+  def load_env!
+    return unless File.exist?(@env_path)
+
+    require "dotenv"
+    Dotenv.overload(@env_path)
   end
 
   def guidelines

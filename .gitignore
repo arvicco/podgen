@@ -1,4 +1,5 @@
 .env
+!.env.example
 output/
 logs/
 *.mp3
