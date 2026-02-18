@@ -1,0 +1,6 @@
+.env
+output/
+logs/
+*.mp3
+.bundle/
+vendor/bundle/
