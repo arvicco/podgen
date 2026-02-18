@@ -14,11 +14,12 @@ end
 class TopicAgent
   MAX_RETRIES = 3
 
-  def initialize(guidelines:, logger: nil)
+  def initialize(guidelines:, recent_topics: nil, logger: nil)
     @logger = logger
     @client = Anthropic::Client.new
     @model = ENV.fetch("CLAUDE_MODEL", "claude-opus-4-6")
     @guidelines = guidelines
+    @recent_topics = recent_topics
   end
 
   # Output: array of topic query strings (same format ResearchAgent expects)
@@ -38,7 +39,7 @@ class TopicAgent
         messages: [
           {
             role: "user",
-            content: "Today's date is #{today}. Generate 4 specific, timely search queries for this podcast episode."
+            content: build_user_prompt(today)
           }
         ],
         output_config: { format: TopicList }
@@ -67,6 +68,16 @@ class TopicAgent
   end
 
   private
+
+  def build_user_prompt(today)
+    prompt = "Today's date is #{today}. Generate 4 specific, timely search queries for this podcast episode."
+    if @recent_topics && !@recent_topics.empty?
+      prompt += "\n\nIMPORTANT: The following topics were already covered in recent episodes.\n" \
+                "Generate queries about DIFFERENT subjects — do not repeat these:\n" \
+                "#{@recent_topics}"
+    end
+    prompt
+  end
 
   def build_system_prompt
     [

@@ -40,6 +40,7 @@ podcast_agent/
 │ │ ├── research_agent.rb # Calls Exa.ai, returns structured research
 │ │ ├── script_agent.rb # Calls Claude API, returns structured script
 │ │ └── tts_agent.rb # Calls ElevenLabs, returns audio file paths
+│ ├── episode_history.rb # Reads/writes per-podcast episode history for dedup
 │ ├── audio_assembler.rb # ffmpeg wrapper: stitches parts + adds music
 │ ├── rss_generator.rb # Generates RSS XML from episode folder
 │ └── logger.rb # Structured run logging
@@ -53,6 +54,7 @@ podcast_agent/
 ├── output/
 │ └── <podcast_name>/ # Per-podcast output
 │   ├── episodes/ # MP3s + debug scripts, named {name}-{date}[suffix]
+│   ├── history.yml # Episode history for deduplication (auto-managed)
 │   └── feed.xml # RSS feed
 │
 ├── logs/
@@ -132,6 +134,11 @@ segments: [
 - Accepts podcast name as ARGV[0] (required); lists available podcasts if missing
 - Uses PodcastConfig to resolve all paths for the given podcast
 - Flow: load guidelines → generate topics (with queue.yml fallback) → research → script → TTS → assemble
+- Episode deduplication via EpisodeHistory (lib/episode_history.rb):
+  - After each successful run, record topics and URLs to output/<podcast>/history.yml
+  - On startup, pass recent topic summaries to TopicAgent so Claude generates different queries
+  - Pass recent URLs to ResearchAgent to filter already-used Exa results
+  - History is auto-pruned to a 7-day lookback window (matches Exa search range)
 - Write a structured run log to logs/<podcast>/<name>-YYYY-MM-DD.log including timings per phase
 - On any unrecoverable error: log the failure and exit cleanly (don't crash loudly)
 - Successful run should print: ✓ Episode ready: output/<podcast>/episodes/<name>-YYYY-MM-DD.mp3

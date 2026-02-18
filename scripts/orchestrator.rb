@@ -19,6 +19,7 @@ require_relative File.join(root, "lib", "agents", "research_agent")
 require_relative File.join(root, "lib", "agents", "script_agent")
 require_relative File.join(root, "lib", "agents", "tts_agent")
 require_relative File.join(root, "lib", "audio_assembler")
+require_relative File.join(root, "lib", "episode_history")
 
 # --- Parse podcast name argument ---
 podcast_name = ARGV[0]
@@ -42,6 +43,7 @@ config.ensure_directories!
 
 today = Date.today
 logger = PodcastAgent::Logger.new(log_path: config.log_path(today))
+history = EpisodeHistory.new(config.history_path)
 
 begin
   logger.log("Podcast Agent started for '#{podcast_name}'")
@@ -60,7 +62,7 @@ begin
   # --- Phase 0: Topic generation ---
   logger.phase_start("Topics")
   begin
-    topic_agent = TopicAgent.new(guidelines: guidelines, logger: logger)
+    topic_agent = TopicAgent.new(guidelines: guidelines, recent_topics: history.recent_topics_summary, logger: logger)
     topics = topic_agent.generate
     logger.log("Generated #{topics.length} topics from guidelines")
   rescue => e
@@ -72,7 +74,7 @@ begin
 
   # --- Phase 1: Research ---
   logger.phase_start("Research")
-  research_agent = ResearchAgent.new(logger: logger)
+  research_agent = ResearchAgent.new(exclude_urls: history.recent_urls, logger: logger)
   research_data = research_agent.research(topics)
   total_findings = research_data.sum { |r| r[:findings].length }
   logger.log("Research complete: #{total_findings} findings across #{topics.length} topics")
@@ -108,6 +110,15 @@ begin
 
   # --- Cleanup TTS temp files ---
   audio_paths.each { |p| File.delete(p) if File.exist?(p) }
+
+  # --- Record episode history for deduplication ---
+  history.record!(
+    date: today,
+    title: script[:title],
+    topics: research_data.map { |r| r[:topic] },
+    urls: research_data.flat_map { |r| r[:findings].map { |f| f[:url] } }
+  )
+  logger.log("Episode recorded in history: #{config.history_path}")
 
   # --- Done ---
   total_time = (Time.now - pipeline_start).round(2)

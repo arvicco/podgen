@@ -1,13 +1,15 @@
 # frozen_string_literal: true
 
 require "exa-ai"
+require "set"
 
 class ResearchAgent
   MAX_RETRIES = 3
   RESULTS_PER_TOPIC = 5
 
-  def initialize(results_per_topic: RESULTS_PER_TOPIC, logger: nil)
+  def initialize(results_per_topic: RESULTS_PER_TOPIC, exclude_urls: Set.new, logger: nil)
     @results_per_topic = results_per_topic
+    @exclude_urls = exclude_urls
     @logger = logger
 
     Exa.configure do |config|
@@ -43,13 +45,22 @@ class ResearchAgent
       start_published_date: (Date.today - 7).iso8601
     )
 
-    results.results.map do |r|
+    all = results.results.map do |r|
       {
         title: r["title"],
         url: r["url"],
         summary: r["summary"]
       }
     end
+
+    if @exclude_urls.any?
+      before = all.length
+      all.reject! { |r| @exclude_urls.include?(r[:url]) }
+      filtered = before - all.length
+      log("Filtered #{filtered} previously-used URL(s) for '#{topic}'") if filtered > 0
+    end
+
+    all
   rescue Exa::Error => e
     log("Failed to research '#{topic}' after #{MAX_RETRIES} attempts: #{e.message}")
     []

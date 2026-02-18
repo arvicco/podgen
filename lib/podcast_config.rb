@@ -4,7 +4,7 @@ require "fileutils"
 require "date"
 
 class PodcastConfig
-  attr_reader :name, :guidelines_path, :queue_path, :episodes_dir, :feed_path, :log_dir
+  attr_reader :name, :guidelines_path, :queue_path, :episodes_dir, :feed_path, :log_dir, :history_path
 
   def initialize(name)
     @name = name
@@ -20,6 +20,7 @@ class PodcastConfig
     @env_path        = File.join(podcast_dir, ".env")
     @episodes_dir    = File.join(@root, "output", name, "episodes")
     @feed_path       = File.join(@root, "output", name, "feed.xml")
+    @history_path    = File.join(@root, "output", name, "history.yml")
     @log_dir         = File.join(@root, "logs", name)
   end
 
