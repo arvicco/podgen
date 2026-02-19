@@ -14,4 +14,4 @@ elif [ -f "$HOME/.zshrc" ]; then
   source "$HOME/.zshrc"
 fi
 
-exec bundle exec ruby scripts/orchestrator.rb "$@"
+exec bundle exec ruby bin/podgen generate --quiet "$@"

@@ -5,3 +5,5 @@ logs/
 *.mp3
 .bundle/
 vendor/bundle/
+podcasts/*/
+!podcasts/ruby_world/

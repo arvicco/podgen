@@ -5,7 +5,10 @@ require "time"
 
 module PodcastAgent
   class Logger
-    def initialize(log_path: nil)
+    # verbosity: :normal (default), :verbose, or :quiet
+    # File logging always writes full detail regardless of verbosity.
+    # Terminal output is gated: :quiet suppresses stdout, :verbose is same as :normal (for future use).
+    def initialize(log_path: nil, verbosity: :normal)
       if log_path
         @log_file = log_path
         FileUtils.mkdir_p(File.dirname(@log_file))
@@ -15,12 +18,13 @@ module PodcastAgent
         FileUtils.mkdir_p(log_dir)
         @log_file = File.join(log_dir, "#{Date.today.strftime('%Y-%m-%d')}.log")
       end
+      @verbosity = verbosity
       @start_times = {}
     end
 
     def log(message)
       entry = "[#{Time.now.strftime('%Y-%m-%d %H:%M:%S')}] #{message}"
-      puts entry
+      puts entry unless @verbosity == :quiet
       File.open(@log_file, "a") { |f| f.puts(entry) }
     end
 
@@ -39,7 +43,9 @@ module PodcastAgent
     end
 
     def error(message)
-      log("ERROR #{message}")
+      entry = "[#{Time.now.strftime('%Y-%m-%d %H:%M:%S')}] ERROR #{message}"
+      $stderr.puts entry
+      File.open(@log_file, "a") { |f| f.puts(entry) }
     end
 
     def log_file_path

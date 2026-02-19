@@ -17,9 +17,13 @@ podcast_agent/
 ├── CLAUDE.md # This file
 ├── Gemfile
 ├── Gemfile.lock
+├── podgen.gemspec # Gem spec for distribution / Homebrew
 ├── .env # API keys (never commit)
 ├── .env.example # Committed template with blank values
 ├── .gitignore
+│
+├── bin/
+│ └── podgen # CLI executable — entry point for all commands
 │
 ├── podcasts/ # One subfolder per podcast
 │ └── ruby_world/ # Example podcast
@@ -31,6 +35,14 @@ podcast_agent/
 │ └── outro.mp3 # Outro music (user-supplied, shared)
 │
 ├── lib/
+│ ├── cli.rb # CLI dispatcher — OptionParser + command registry
+│ ├── cli/
+│ │ ├── version.rb # PodgenCLI::VERSION
+│ │ ├── generate_command.rb # Full pipeline (extracted from orchestrator.rb)
+│ │ ├── rss_command.rb # RSS feed generation
+│ │ ├── list_command.rb # Lists available podcasts
+│ │ ├── test_command.rb # Delegates to scripts/test_*.rb
+│ │ └── schedule_command.rb # Delegates to install_scheduler.sh
 │ ├── podcast_config.rb # PodcastConfig — resolves all paths + parses sources config
 │ ├── source_manager.rb # Coordinates multiple research sources per podcast
 │ ├── agents/
@@ -47,10 +59,13 @@ podcast_agent/
 │ ├── rss_generator.rb # Generates RSS XML from episode folder
 │ └── logger.rb # Structured run logging
 │
+├── Formula/
+│ └── podgen.rb # Homebrew formula template
+│
 ├── scripts/
-│ ├── orchestrator.rb # Main entry point — accepts podcast name argument
-│ ├── run.sh # launchd wrapper — passes podcast name through
-│ ├── generate_rss.rb # RSS generator — accepts podcast name argument
+│ ├── orchestrator.rb # Legacy entry point (use `podgen generate` instead)
+│ ├── run.sh # launchd wrapper — calls `bin/podgen generate --quiet`
+│ ├── generate_rss.rb # Legacy RSS generator (use `podgen rss` instead)
 │ └── install_scheduler.sh # Installs per-podcast launchd plist
 │
 ├── output/
@@ -66,10 +81,10 @@ podcast_agent/
 ```
 ### Multi-podcast support
 - Each podcast lives in `podcasts/<name>/` with its own `guidelines.md` and `queue.yml`
-- The orchestrator requires a podcast name argument: `ruby scripts/orchestrator.rb ruby_world`
+- The CLI requires a podcast name argument: `podgen generate ruby_world`
 - `PodcastConfig` resolves all paths (episodes, logs, feed) for a given podcast name
 - Same-day runs get suffixed: `name-2026-02-18.mp3`, then `name-2026-02-18a.mp3`, etc.
-- Scheduling is per-podcast via `scripts/install_scheduler.sh <podcast_name>`
+- Scheduling is per-podcast via `podgen schedule <podcast_name>`
 ---
 ## Build Order
 Build in this exact sequence. Complete and test each phase before moving to the next.
@@ -79,7 +94,7 @@ Build in this exact sequence. Complete and test each phase before moving to the 
 - Set up .env loading via dotenv gem
 - Write .env.example with all required key names
 - Write .gitignore (ignore .env, output/, logs/)
-- Verify scaffold runs without errors: ruby scripts/orchestrator.rb <podcast_name>
+- Verify scaffold runs without errors: `podgen generate <podcast_name>`
 ### Phase 2 — Research (multi-source)
 - Research is modular: each source lives in lib/sources/ and implements `research(topics, exclude_urls:)`
 - SourceManager (lib/source_manager.rb) coordinates enabled sources per podcast
@@ -89,7 +104,7 @@ Build in this exact sequence. Complete and test each phase before moving to the 
 - ResearchAgent (Exa.ai) remains in lib/agents/ as the original source
 - All sources return the same format: [{ topic:, findings: [{ title:, url:, summary: }] }]
 - SourceManager merges results, deduplicates URLs across sources
-- Write standalone test scripts: test_research.rb, test_rss.rb, test_hn.rb, test_claude_web.rb
+- Write standalone test scripts: `podgen test research`, `podgen test rss`, `podgen test hn`, `podgen test claude_web`
 ### Phase 3 — Script Agent
 - Implement ScriptAgent using the official anthropic Ruby gem (claude-opus-4-6)
 - Use Structured Outputs (output_config with JSON schema) for guaranteed valid output
@@ -110,7 +125,7 @@ segments: [
 - Generate the full script in a single API call (not segment-by-segment) for narrative coherence
 - The system prompt must enforce guidelines strictly — tone, length, format
 - Save raw script to output/<podcast>/episodes/<name>-YYYY-MM-DD_script.md for debugging
-- Write a standalone test script scripts/test_script.rb
+- Write a standalone test script: `podgen test script`
 ### Phase 4 — TTS Agent
 - Implement TTSAgent using the ElevenLabs API (httparty, no official Ruby SDK)
 - Input: array of segment objects from script
@@ -119,7 +134,7 @@ segments: [
 - Voice ID and model should be configurable via .env (default: eleven_multilingual_v2)
 - Note: eleven_multilingual_v2 has a 10,000 char per-request limit; split longer segments
 - Output: ordered array of file paths to segment audio files
-- Write a standalone test script scripts/test_tts.rb
+- Write a standalone test script: `podgen test tts`
 ### Phase 5 — Audio Assembly
 - Implement AudioAssembler as a wrapper around ffmpeg via Open3.capture3 (not system())
 - Input: segment audio paths, intro.mp3, outro.mp3, output path
@@ -133,10 +148,10 @@ segments: [
   - Pass 2: normalize with measured values, preserving natural speech dynamics
 - Final output: MP3 at 192 kbps, 44100 Hz, mono → output/<podcast>/episodes/<name>-YYYY-MM-DD.mp3
 - Handle missing intro/outro gracefully (skip if files don't exist)
-- Write a standalone test: scripts/test_assembly.rb
+- Write a standalone test: `podgen test assembly`
 ### Phase 6 — Orchestrator
-- Wire all agents together in scripts/orchestrator.rb
-- Accepts podcast name as ARGV[0] (required); lists available podcasts if missing
+- Wire all agents together in `lib/cli/generate_command.rb` (CLI entry: `podgen generate <name>`)
+- Legacy script remains at `scripts/orchestrator.rb`
 - Uses PodcastConfig to resolve all paths for the given podcast
 - Flow: load guidelines → generate topics (with queue.yml fallback) → research → script → TTS → assemble
 - Episode deduplication via EpisodeHistory (lib/episode_history.rb):
@@ -151,14 +166,14 @@ segments: [
 - Implement RssGenerator that scans output/<podcast>/episodes/ for MP3s
 - Generates a valid podcast RSS 2.0 XML file at output/<podcast>/feed.xml
 - Each episode entry uses filename date as title and pubDate
-- scripts/generate_rss.rb accepts podcast name as ARGV[0]
+- CLI entry: `podgen rss <podcast_name>` (legacy: `scripts/generate_rss.rb`)
 - Document how to serve this locally or via a static host
 ### Phase 8 — Scheduler
 - com.podcastagent.plist is a template — install_scheduler.sh fills in paths and podcast name
-- One launchd job per podcast: `scripts/install_scheduler.sh <podcast_name>`
+- One launchd job per podcast: `podgen schedule <podcast_name>`
 - Unique label per podcast: com.podcastagent.<podcast_name>
 - Default schedule: 6:00 AM daily
-- scripts/run.sh passes podcast name through to orchestrator
+- scripts/run.sh passes podcast name through to `bin/podgen generate --quiet`
 ---
 ## Coding Standards
 - Every class and method has a single, clear responsibility
@@ -242,7 +257,7 @@ Per-podcast `.env` is loaded via `Dotenv.overload` after the root `.env`, so any
 key set there takes precedence for that podcast's pipeline run.
 ---
 ## Testing Approach
-- Each agent has its own scripts/test_*.rb runner that can be executed in isolation
+- Each agent has its own test runner: `podgen test <name>` (delegates to scripts/test_*.rb)
 - Tests use real API calls (this is not a unit-tested library; it's a pipeline script)
 - Keep API costs low during testing: use short topic inputs and limit research results to 2 per topic
 - After Phase 6, a full end-to-end test run should cost under $0.50
@@ -252,7 +267,7 @@ Generate a README that covers:
 1. Prerequisites (Ruby version, Homebrew, ffmpeg, API accounts)
 2. Installation (bundle install, copying .env.example to .env)
 3. Creating a podcast (adding a folder under podcasts/ with guidelines.md and queue.yml)
-4. First run: `ruby scripts/orchestrator.rb <podcast_name>`
+4. First run: `podgen generate <podcast_name>`
 5. How to customize guidelines and topics
 6. Setting up the launchd scheduler per podcast
 7. Optional RSS setup

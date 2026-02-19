@@ -29,10 +29,60 @@ ELEVENLABS_VOICE_ID=...       # See: https://elevenlabs.io/app/voice-library
 EXA_API_KEY=...
 ```
 
+## Usage
+
+```bash
+podgen <command> [options]
+```
+
+Or run directly with Ruby:
+
+```bash
+ruby bin/podgen <command> [options]
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `podgen generate <podcast>` | Run the full pipeline: research → script → TTS → assembly |
+| `podgen rss <podcast>` | Generate RSS feed from existing episodes |
+| `podgen list` | List available podcasts with titles |
+| `podgen test <name>` | Run a standalone test (research, hn, rss, tts, etc.) |
+| `podgen schedule <podcast>` | Install a daily launchd scheduler |
+
+### Global flags
+
+| Flag | Description |
+|------|-------------|
+| `-v, --verbose` | Verbose output |
+| `-q, --quiet` | Suppress terminal output (errors still shown, log file gets full detail) |
+| `-V, --version` | Print version |
+| `-h, --help` | Show help |
+
+### Examples
+
+```bash
+# Generate an episode
+podgen generate ruby_world
+
+# Generate silently (for cron/launchd)
+podgen --quiet generate ruby_world
+
+# List all configured podcasts
+podgen list
+
+# Generate RSS feed
+podgen rss ruby_world
+
+# Run a component test
+podgen test hn
+```
+
 ## First Run
 
 ```bash
-ruby scripts/orchestrator.rb
+podgen generate <podcast_name>
 ```
 
 This will:
@@ -41,17 +91,37 @@ This will:
 3. Synthesize speech via ElevenLabs (~90s)
 4. Assemble and normalize the final MP3 (~22s)
 
-Output: `output/episodes/YYYY-MM-DD.mp3` (~10 min episode, ~12 MB)
+Output: `output/<podcast>/episodes/<name>-YYYY-MM-DD.mp3` (~10 min episode, ~12 MB)
+
+## Creating a Podcast
+
+1. Create a directory under `podcasts/`:
+
+```bash
+mkdir -p podcasts/my_podcast
+```
+
+2. Add `podcasts/my_podcast/guidelines.md` with your format, tone, and topic preferences (see `podcasts/ruby_world/guidelines.md` for an example).
+
+3. Add `podcasts/my_podcast/queue.yml` with fallback topics:
+
+```yaml
+topics:
+  - AI developer tools and agent frameworks
+  - Ruby on Rails ecosystem updates
+```
+
+4. Optionally add per-podcast voice/model overrides in `podcasts/my_podcast/.env`.
 
 ## Customizing
 
 ### Podcast Guidelines
 
-Edit `config/guidelines.md` to change format, tone, length, and content rules. The script agent follows these strictly.
+Edit `podcasts/<name>/guidelines.md` to change format, tone, length, and content rules. The script agent follows these strictly.
 
 ### Topics
 
-Edit `topics/queue.yml`:
+Edit `podcasts/<name>/queue.yml`:
 
 ```yaml
 topics:
@@ -113,7 +183,7 @@ Add the section to `podcasts/<name>/guidelines.md`:
 Run the installer to set up daily generation at 6:00 AM:
 
 ```bash
-bash scripts/install_scheduler.sh
+podgen schedule ruby_world
 ```
 
 Verify it's loaded:
@@ -125,8 +195,8 @@ launchctl list | grep podcastagent
 To uninstall:
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.podcastagent.plist
-rm ~/Library/LaunchAgents/com.podcastagent.plist
+launchctl unload ~/Library/LaunchAgents/com.podcastagent.<podcast_name>.plist
+rm ~/Library/LaunchAgents/com.podcastagent.<podcast_name>.plist
 ```
 
 **Note:** macOS must be awake at the scheduled time. Keep the machine plugged in and disable sleep, or use `caffeinate`.
@@ -136,13 +206,13 @@ rm ~/Library/LaunchAgents/com.podcastagent.plist
 Generate a podcast RSS feed from your episodes:
 
 ```bash
-ruby scripts/generate_rss.rb
+podgen rss ruby_world
 ```
 
 Serve locally:
 
 ```bash
-cd output && ruby -run -e httpd . -p 8080
+cd output/ruby_world && ruby -run -e httpd . -p 8080
 ```
 
 Then add `http://localhost:8080/feed.xml` to your podcast app. For remote access, host the `output/` directory on any static file server (nginx, S3, Cloudflare Pages, etc.) and update the enclosure URLs in the feed accordingly.
@@ -151,11 +221,21 @@ Then add `http://localhost:8080/feed.xml` to your podcast app. For remote access
 
 ```
 podgen/
+├── bin/
+│   └── podgen               # CLI executable
 ├── podcasts/<name>/
 │   ├── guidelines.md         # Podcast format, style, & sources config
 │   └── queue.yml             # Fallback topic queue
 ├── assets/                   # Intro/outro music (optional)
 ├── lib/
+│   ├── cli.rb                # CLI dispatcher (OptionParser)
+│   ├── cli/
+│   │   ├── version.rb        # PodgenCLI::VERSION
+│   │   ├── generate_command.rb # Full pipeline command
+│   │   ├── rss_command.rb    # RSS feed generation
+│   │   ├── list_command.rb   # List available podcasts
+│   │   ├── test_command.rb   # Run test scripts
+│   │   └── schedule_command.rb # Install launchd scheduler
 │   ├── source_manager.rb     # Multi-source research coordinator
 │   ├── agents/
 │   │   ├── topic_agent.rb    # Claude topic generation
@@ -170,9 +250,9 @@ podgen/
 │   ├── rss_generator.rb      # RSS 2.0 feed
 │   └── logger.rb             # Structured logging
 ├── scripts/
-│   ├── orchestrator.rb       # Main pipeline entry point
+│   ├── orchestrator.rb       # Legacy pipeline entry point
 │   ├── run.sh                # launchd wrapper
-│   └── generate_rss.rb       # RSS generator runner
+│   └── generate_rss.rb       # Legacy RSS generator
 ├── output/<name>/episodes/   # Final MP3s per podcast
 └── logs/<name>/              # Run logs per podcast
 ```
@@ -180,13 +260,13 @@ podgen/
 ## Testing Individual Components
 
 ```bash
-ruby scripts/test_research.rb      # Exa.ai search
-ruby scripts/test_rss.rb           # RSS feed fetching
-ruby scripts/test_hn.rb            # Hacker News search
-ruby scripts/test_claude_web.rb    # Claude web search
-ruby scripts/test_script.rb        # Claude script generation
-ruby scripts/test_tts.rb           # ElevenLabs TTS
-ruby scripts/test_assembly.rb      # ffmpeg assembly
+podgen test research       # Exa.ai search
+podgen test rss            # RSS feed fetching
+podgen test hn             # Hacker News search
+podgen test claude_web     # Claude web search
+podgen test script         # Claude script generation
+podgen test tts            # ElevenLabs TTS
+podgen test assembly       # ffmpeg assembly
 ```
 
 ## Cost Estimate
