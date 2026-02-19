@@ -1,12 +1,13 @@
 # Podcast Guidelines
 
 ## Name
-Ruby Universe
+Ruby World
 
 ## Author
 Ruby Boy
 
 ## Format
+- Always lead with podcast name and author
 - Target length: 9–11 minutes
 - Open with a 30-second news brief covering the most interesting recent developments
 - Four main segments of 3 minutes each, one per topic
@@ -33,7 +34,6 @@ not a journalist or content creator. No filler phrases. No forced enthusiasm. En
     - https://www.ruby-lang.org/en/feeds/news.rss
 
 ## Do not include
-- Always lead with podcast name and author
 - Sponsor messages or calls to action
 - Recaps of what was just said
 - Phrases like "in today's episode" or "stay tuned"
