@@ -14,8 +14,10 @@ class Podgen < Formula
   sha256 "5cca977dbd046462b72761a6f9fc02fedb25c1c89b2f9599e5871229af23bfc1"
   license "MIT"
 
-  depends_on "ruby"
   depends_on "ffmpeg"
+
+  # Ruby 3.2+ required — uses whatever ruby is on PATH (rbenv, asdf, system, etc.)
+  # No `depends_on "ruby"` to avoid pulling Homebrew's heavyweight Ruby build.
 
   def install
     # Install gems into libexec so they don't pollute the system gem path
@@ -32,7 +34,7 @@ class Podgen < Formula
       export GEM_HOME="#{libexec}"
       export GEM_PATH="#{libexec}"
       export PODGEN_ROOT="${PODGEN_ROOT:-${PODGEN_HOME:-$HOME/.podgen}}"
-      exec "#{Formula["ruby"].opt_bin}/ruby" "#{libexec}/gems/podgen-#{version}/bin/podgen" "$@"
+      exec ruby "#{libexec}/gems/podgen-#{version}/bin/podgen" "$@"
     BASH
   end
 
@@ -62,6 +64,8 @@ class Podgen < Formula
 
   def caveats
     <<~EOS
+      Requires Ruby 3.2+ on your PATH (via rbenv, asdf, or similar).
+
       podgen has created a project directory at ~/.podgen
 
       To get started:
