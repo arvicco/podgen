@@ -33,7 +33,7 @@ not a journalist or content creator. No filler phrases. No forced enthusiasm. En
     - https://www.ruby-lang.org/en/feeds/news.rss
 
 ## Do not include
-- Lead with podcast name and author
+- Always lead with podcast name and author
 - Sponsor messages or calls to action
 - Recaps of what was just said
 - Phrases like "in today's episode" or "stay tuned"
