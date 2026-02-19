@@ -22,12 +22,9 @@ podcast_agent/
 ├── .gitignore
 │
 ├── podcasts/ # One subfolder per podcast
-│ ├── fulgur_news/
-│ │ ├── guidelines.md # Podcast format & style rules
-│ │ └── queue.yml # Fallback topic queue
-│ └── ai_weekly/ # Example second podcast
-│   ├── guidelines.md
-│   └── queue.yml
+│ └── ruby_world/ # Example podcast
+│   ├── guidelines.md # Podcast format, style & sources config
+│   └── queue.yml # Fallback topic queue
 │
 ├── assets/
 │ ├── intro.mp3 # Intro music (user-supplied, shared)
@@ -69,7 +66,7 @@ podcast_agent/
 ```
 ### Multi-podcast support
 - Each podcast lives in `podcasts/<name>/` with its own `guidelines.md` and `queue.yml`
-- The orchestrator requires a podcast name argument: `ruby scripts/orchestrator.rb fulgur_news`
+- The orchestrator requires a podcast name argument: `ruby scripts/orchestrator.rb ruby_world`
 - `PodcastConfig` resolves all paths (episodes, logs, feed) for a given podcast name
 - Same-day runs get suffixed: `name-2026-02-18.mp3`, then `name-2026-02-18a.mp3`, etc.
 - Scheduling is per-podcast via `scripts/install_scheduler.sh <podcast_name>`

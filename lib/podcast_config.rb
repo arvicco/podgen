@@ -54,9 +54,9 @@ class PodcastConfig
   end
 
   # Returns the next available episode basename (without extension) for the given date.
-  # First run:  fulgur_news-2026-02-18
-  # Second run: fulgur_news-2026-02-18a
-  # Third run:  fulgur_news-2026-02-18b
+  # First run:  ruby_world-2026-02-18
+  # Second run: ruby_world-2026-02-18a
+  # Third run:  ruby_world-2026-02-18b
   def episode_basename(date = Date.today)
     date_str = date.strftime("%Y-%m-%d")
     prefix = "#{@name}-#{date_str}"
