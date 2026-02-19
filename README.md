@@ -38,6 +38,9 @@ ANTHROPIC_API_KEY=sk-ant-...
 ELEVENLABS_API_KEY=...
 ELEVENLABS_VOICE_ID=...       # See: https://elevenlabs.io/app/voice-library
 EXA_API_KEY=...
+BLUESKY_HANDLE=...            # Optional: your-handle.bsky.social
+BLUESKY_APP_PASSWORD=...      # Optional: https://bsky.app/settings/app-passwords
+SOCIALDATA_API_KEY=...        # Optional: https://socialdata.tools
 ```
 
 ### Project root resolution
@@ -191,6 +194,8 @@ Available sources:
 | Hacker News | `hackernews` | None (free) | $0 | HN Algolia API, top stories per topic |
 | RSS feeds | `rss` | None | $0 | Fetch any RSS/Atom feed |
 | Claude Web Search | `claude_web` | ANTHROPIC_API_KEY | ~$0.02/topic | Claude with web_search tool (Haiku) |
+| Bluesky | `bluesky` | BLUESKY_HANDLE + BLUESKY_APP_PASSWORD | $0 | AT Protocol post search (great for tech topics) |
+| X (Twitter) | `x` | SOCIALDATA_API_KEY | ~$0.01 | Twitter/X search via SocialData.tools |
 
 Add the section to `podcasts/<name>/guidelines.md`:
 
@@ -198,6 +203,8 @@ Add the section to `podcasts/<name>/guidelines.md`:
 ## Sources
 - exa
 - hackernews
+- bluesky
+- x: @dhaboruby, @rails, @maboroshi_llm
 - rss:
   - https://www.coindesk.com/arc/outboundfeeds/rss/
   - https://cointelegraph.com/rss
@@ -205,7 +212,8 @@ Add the section to `podcasts/<name>/guidelines.md`:
 ```
 
 - Plain items (`- exa`) are boolean toggles
-- Items with sub-lists (`- rss:` with indented URLs) carry parameters
+- Items with sub-lists (`- rss:` with feed URLs) or inline values (`- x: @user1, @user2`) carry parameters
+- `- x` (no handles) does general search only; `- x: @handle, ...` searches those accounts first, then fills with general results
 - Sources not listed are disabled
 - Results from all sources are merged and deduplicated before script generation
 
@@ -318,6 +326,8 @@ podgen test research       # Exa.ai search
 podgen test rss            # RSS feed fetching
 podgen test hn             # Hacker News search
 podgen test claude_web     # Claude web search
+podgen test bluesky        # Bluesky post search
+podgen test x              # X (Twitter) search via SocialData
 podgen test script         # Claude script generation
 podgen test tts            # ElevenLabs TTS
 podgen test assembly       # ffmpeg assembly
@@ -332,6 +342,8 @@ Per daily episode (~10 min), with all sources enabled:
 - Claude Opus 4.6: ~$0.10 per extra language (translation)
 - Claude Haiku (web search): ~$0.08 (4 topics × web_search)
 - Hacker News: free (Algolia API)
+- Bluesky: free (AT Protocol, requires account)
+- X (Twitter): ~$0.01 (SocialData.tools, $0.0002/tweet)
 - RSS feeds: free
 - ElevenLabs: varies by plan ($22-99/month for daily use)
 

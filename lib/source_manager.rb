@@ -6,13 +6,17 @@ require_relative "agents/research_agent"
 require_relative "sources/rss_source"
 require_relative "sources/hn_source"
 require_relative "sources/claude_web_source"
+require_relative "sources/bluesky_source"
+require_relative "sources/x_source"
 
 class SourceManager
   REGISTRY = {
     "exa" => ->(opts) { ResearchAgent.new(**opts) },
     "rss" => ->(opts) { RSSSource.new(**opts) },
     "hackernews" => ->(opts) { HNSource.new(**opts) },
-    "claude_web" => ->(opts) { ClaudeWebSource.new(**opts) }
+    "claude_web" => ->(opts) { ClaudeWebSource.new(**opts) },
+    "bluesky" => ->(opts) { BlueskySource.new(**opts) },
+    "x" => ->(opts) { XSource.new(**opts) }
   }.freeze
 
   def initialize(source_config:, exclude_urls: Set.new, logger: nil, cache_dir: nil)
@@ -114,6 +118,8 @@ class SourceManager
         opts[:exclude_urls] = @exclude_urls
       when "rss"
         opts[:feeds] = config.is_a?(Array) ? config : []
+      when "x"
+        opts[:priority_handles] = config.is_a?(Array) ? config : []
       end
 
       [name, factory.call(opts)]

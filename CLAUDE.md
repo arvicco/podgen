@@ -46,7 +46,9 @@ podgen/
 │   ├── sources/
 │   │   ├── rss_source.rb         # RSS/Atom feeds (keyword-based topic matching)
 │   │   ├── hn_source.rb          # Hacker News Algolia API
-│   │   └── claude_web_source.rb  # Claude + web_search tool (configurable model/max_results)
+│   │   ├── claude_web_source.rb  # Claude + web_search tool (configurable model/max_results)
+│   │   ├── bluesky_source.rb    # Bluesky AT Protocol authenticated post search
+│   │   └── x_source.rb          # X (Twitter) via SocialData.tools API
 │   ├── episode_history.rb        # Episode dedup (atomic YAML writes, 7-day lookback)
 │   ├── audio_assembler.rb        # ffmpeg wrapper (duration caching, crossfades, loudnorm)
 │   ├── rss_generator.rb          # RSS 2.0 XML feed
@@ -82,7 +84,7 @@ generate_command.rb:
 - **Same-day suffix:** `name-2026-02-18.mp3`, then `name-2026-02-18a.mp3`, etc.
 - **Episode dedup:** History records topics + URLs; TopicAgent avoids repeats, sources exclude used URLs. 7-day lookback window.
 - **Scrap:** `podgen scrap <name>` removes last episode files (MP3 + scripts, all languages) and last history entry. Supports `--dry-run`.
-- **Research sources:** Parallel execution via threads. Sources: `exa`, `hackernews`, `rss` (with feed URLs), `claude_web`. Default: exa only. 24h file-based cache per source+topics.
+- **Research sources:** Parallel execution via threads. Sources: `exa`, `hackernews`, `rss` (with feed URLs), `claude_web`, `bluesky`, `x`. Default: exa only. 24h file-based cache per source+topics.
 - **`--dry-run`:** Validates config, uses queue.yml topics, generates synthetic data, saves debug script, skips all API calls/TTS/assembly/history.
 - **Lockfile:** Prevents concurrent runs of the same podcast via `flock`.
 
@@ -103,7 +105,7 @@ generate_command.rb:
 | `## Do not include` | No | Content restrictions |
 
 ### Environment variables
-**Root `.env`:** `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID` (default: eleven_multilingual_v2), `ELEVENLABS_OUTPUT_FORMAT` (default: mp3_44100_128), `EXA_API_KEY`, `CLAUDE_MODEL` (default: claude-opus-4-6), `CLAUDE_WEB_MODEL` (default: claude-haiku-4-5-20251001)
+**Root `.env`:** `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID` (default: eleven_multilingual_v2), `ELEVENLABS_OUTPUT_FORMAT` (default: mp3_44100_128), `EXA_API_KEY`, `CLAUDE_MODEL` (default: claude-opus-4-6), `CLAUDE_WEB_MODEL` (default: claude-haiku-4-5-20251001), `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD`, `SOCIALDATA_API_KEY`
 
 **Per-podcast `.env`** (optional): overrides for `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID`, `CLAUDE_MODEL`. Loaded via `Dotenv.overload`.
 
@@ -131,7 +133,7 @@ podgen [flags] <command> <args>
   scrap <podcast>      # Remove last episode + history entry
   rss <podcast>        # Generate RSS feed
   list                 # List podcasts
-  test <name>          # Run test (research|rss|hn|claude_web|script|tts|assembly|translation|sources)
+  test <name>          # Run test (research|rss|hn|claude_web|bluesky|x|script|tts|assembly|translation|sources)
   schedule <podcast>   # Install launchd scheduler
 
 Flags: -v/--verbose  -q/--quiet  --dry-run  -V/--version  -h/--help

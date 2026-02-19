@@ -172,12 +172,21 @@ class PodcastConfig
     current_key = nil
 
     section.each_line do |line|
-      # Top-level item: "- name" or "- name:"
+      # Top-level item: "- name", "- name:", or "- name: val1, val2"
       if line.match?(/^- \S/)
         item = line.strip.sub(/^- /, "")
-        if item.end_with?(":")
-          current_key = item.chomp(":")
-          sources[current_key] = []
+        if item.include?(":")
+          key, value = item.split(":", 2)
+          current_key = key.strip
+          inline = value.strip
+          if inline.empty?
+            # "- name:" with sub-list to follow
+            sources[current_key] = []
+          else
+            # "- name: val1, val2" inline comma-separated
+            current_key = nil
+            sources[key.strip] = inline.split(",").map(&:strip)
+          end
         else
           current_key = nil
           sources[item] = true

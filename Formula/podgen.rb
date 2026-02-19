@@ -58,6 +58,11 @@ class Podgen < Formula
         ELEVENLABS_MODEL_ID=eleven_multilingual_v2
         ELEVENLABS_OUTPUT_FORMAT=mp3_44100_128
         CLAUDE_MODEL=claude-opus-4-6
+        # Optional: Bluesky source (free)
+        BLUESKY_HANDLE=
+        BLUESKY_APP_PASSWORD=
+        # Optional: X/Twitter source via SocialData.tools (~$0.01/run)
+        SOCIALDATA_API_KEY=
       ENV
     end
   end
