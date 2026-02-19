@@ -34,12 +34,17 @@ podcast_agent/
 │ └── outro.mp3 # Outro music (user-supplied, shared)
 │
 ├── lib/
-│ ├── podcast_config.rb # PodcastConfig — resolves all paths for a podcast
+│ ├── podcast_config.rb # PodcastConfig — resolves all paths + parses sources config
+│ ├── source_manager.rb # Coordinates multiple research sources per podcast
 │ ├── agents/
 │ │ ├── topic_agent.rb # Calls Claude API, generates timely search queries
 │ │ ├── research_agent.rb # Calls Exa.ai, returns structured research
 │ │ ├── script_agent.rb # Calls Claude API, returns structured script
 │ │ └── tts_agent.rb # Calls ElevenLabs, returns audio file paths
+│ ├── sources/
+│ │ ├── rss_source.rb # Fetches RSS/Atom feeds (stdlib net/http + rss)
+│ │ ├── hn_source.rb # Searches Hacker News via Algolia API (httparty)
+│ │ └── claude_web_source.rb # Claude API with web_search tool (anthropic gem)
 │ ├── episode_history.rb # Reads/writes per-podcast episode history for dedup
 │ ├── audio_assembler.rb # ffmpeg wrapper: stitches parts + adds music
 │ ├── rss_generator.rb # Generates RSS XML from episode folder
@@ -78,13 +83,16 @@ Build in this exact sequence. Complete and test each phase before moving to the 
 - Write .env.example with all required key names
 - Write .gitignore (ignore .env, output/, logs/)
 - Verify scaffold runs without errors: ruby scripts/orchestrator.rb <podcast_name>
-### Phase 2 — Research Agent
-- Implement ResearchAgent using the official exa-ai Ruby gem
-- Input: array of topic strings from podcasts/<name>/queue.yml
-- For each topic: search for the 5 most recent, relevant results with Summary content model
-- Output: structured Ruby hash { topic: String, findings: [{ title, url, summary }] }
-- Include error handling and retry logic (max 3 attempts per topic)
-- Write a standalone test script scripts/test_research.rb
+### Phase 2 — Research (multi-source)
+- Research is modular: each source lives in lib/sources/ and implements `research(topics, exclude_urls:)`
+- SourceManager (lib/source_manager.rb) coordinates enabled sources per podcast
+- Sources are configured via an optional `## Sources` section in guidelines.md
+- Available sources: exa (Exa.ai), hackernews (HN Algolia API), rss (RSS/Atom feeds), claude_web (Claude + web_search)
+- Default (if ## Sources omitted): exa only (backward compatible)
+- ResearchAgent (Exa.ai) remains in lib/agents/ as the original source
+- All sources return the same format: [{ topic:, findings: [{ title:, url:, summary: }] }]
+- SourceManager merges results, deduplicates URLs across sources
+- Write standalone test scripts: test_research.rb, test_rss.rb, test_hn.rb, test_claude_web.rb
 ### Phase 3 — Script Agent
 - Implement ScriptAgent using the official anthropic Ruby gem (claude-opus-4-6)
 - Use Structured Outputs (output_config with JSON schema) for guaranteed valid output
@@ -192,11 +200,21 @@ not a journalist or content creator. No filler phrases. No forced enthusiasm.
 ## Topics (default rotation — override with queue.yml)
 - AI and software development news
 - Ruby ecosystem updates
+## Sources
+- exa
+- hackernews
+- rss:
+  - https://www.coindesk.com/arc/outboundfeeds/rss/
+  - https://cointelegraph.com/rss
+- claude_web
+
 ## Do not include
 - Sponsor messages or calls to action
 - Recaps of what was just said
 - Phrases like "in today's episode" or "stay tuned"
 ```
+The `## Sources` section is optional. If omitted, defaults to exa only.
+Available sources: `exa`, `hackernews`, `rss` (with sub-list of feed URLs), `claude_web`.
 ### podcasts/<name>/queue.yml — example:
 ```yaml
 topics:

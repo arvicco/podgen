@@ -34,7 +34,14 @@ class PodcastConfig
   end
 
   def guidelines
-    File.read(@guidelines_path)
+    @guidelines_text ||= File.read(@guidelines_path)
+  end
+
+  # Parses the ## Sources section from guidelines.md
+  # Returns: { "exa" => true, "hackernews" => true, "rss" => ["url1", ...], "claude_web" => true }
+  # Defaults to { "exa" => true } if section is missing
+  def sources
+    @sources ||= parse_sources_section(guidelines)
   end
 
   def queue_topics
@@ -83,5 +90,39 @@ class PodcastConfig
       .select { |f| Dir.exist?(f) }
       .map { |f| File.basename(f) }
       .sort
+  end
+
+  private
+
+  def parse_sources_section(text)
+    default = { "exa" => true }
+
+    # Extract text between ## Sources and the next ## heading (or EOF)
+    match = text.match(/^## Sources\s*\n(.*?)(?=^## |\z)/m)
+    return default unless match
+
+    section = match[1]
+    sources = {}
+    current_key = nil
+
+    section.each_line do |line|
+      # Top-level item: "- name" or "- name:"
+      if line.match?(/^- \S/)
+        item = line.strip.sub(/^- /, "")
+        if item.end_with?(":")
+          current_key = item.chomp(":")
+          sources[current_key] = []
+        else
+          current_key = nil
+          sources[item] = true
+        end
+      # Sub-item: "  - value" (indented under a key with colon)
+      elsif current_key && line.match?(/^\s+- \S/)
+        value = line.strip.sub(/^- /, "")
+        sources[current_key] << value
+      end
+    end
+
+    sources.empty? ? default : sources
   end
 end

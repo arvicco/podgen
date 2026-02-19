@@ -8,8 +8,8 @@ Fully autonomous podcast generation pipeline. Researches topics, writes a script
 - **Homebrew** (macOS)
 - **ffmpeg**: `brew install ffmpeg`
 - **API accounts**:
-  - [Anthropic](https://console.anthropic.com/) — Claude API for script generation
-  - [Exa.ai](https://exa.ai/) — research/news search
+  - [Anthropic](https://console.anthropic.com/) — Claude API for script generation (also powers Claude Web Search source)
+  - [Exa.ai](https://exa.ai/) — research/news search (default source)
   - [ElevenLabs](https://elevenlabs.io/) — text-to-speech
 
 ## Installation
@@ -36,7 +36,7 @@ ruby scripts/orchestrator.rb
 ```
 
 This will:
-1. Research your configured topics via Exa.ai (~23s)
+1. Research your configured topics via enabled sources (~23s with Exa only, longer with multiple)
 2. Generate a podcast script via Claude (~48s)
 3. Synthesize speech via ElevenLabs (~90s)
 4. Assemble and normalize the final MP3 (~22s)
@@ -77,6 +77,36 @@ Drop MP3 files into:
 - `assets/outro.mp3` — played after the last segment (2s fade-in)
 
 Both are optional. The pipeline skips them if the files don't exist.
+
+### Research Sources
+
+Research is modular — each podcast can enable different sources via a `## Sources` section in its `guidelines.md`. If the section is omitted, only Exa.ai is used (backward compatible).
+
+Available sources:
+
+| Source | Key | API needed | Cost per run | Description |
+|--------|-----|-----------|--------------|-------------|
+| Exa.ai | `exa` | EXA_API_KEY | ~$0.03 | AI-powered news search (default) |
+| Hacker News | `hackernews` | None (free) | $0 | HN Algolia API, top stories per topic |
+| RSS feeds | `rss` | None | $0 | Fetch any RSS/Atom feed |
+| Claude Web Search | `claude_web` | ANTHROPIC_API_KEY | ~$0.02/topic | Claude with web_search tool (Haiku) |
+
+Add the section to `podcasts/<name>/guidelines.md`:
+
+```markdown
+## Sources
+- exa
+- hackernews
+- rss:
+  - https://www.coindesk.com/arc/outboundfeeds/rss/
+  - https://cointelegraph.com/rss
+- claude_web
+```
+
+- Plain items (`- exa`) are boolean toggles
+- Items with sub-lists (`- rss:` with indented URLs) carry parameters
+- Sources not listed are disabled
+- Results from all sources are merged and deduplicated before script generation
 
 ## Scheduling (launchd)
 
@@ -121,14 +151,21 @@ Then add `http://localhost:8080/feed.xml` to your podcast app. For remote access
 
 ```
 podgen/
-├── config/guidelines.md      # Podcast format & style rules
-├── topics/queue.yml          # Topic queue
+├── podcasts/<name>/
+│   ├── guidelines.md         # Podcast format, style, & sources config
+│   └── queue.yml             # Fallback topic queue
 ├── assets/                   # Intro/outro music (optional)
 ├── lib/
+│   ├── source_manager.rb     # Multi-source research coordinator
 │   ├── agents/
+│   │   ├── topic_agent.rb    # Claude topic generation
 │   │   ├── research_agent.rb # Exa.ai search
 │   │   ├── script_agent.rb   # Claude script generation
 │   │   └── tts_agent.rb      # ElevenLabs TTS
+│   ├── sources/
+│   │   ├── rss_source.rb     # RSS/Atom feed fetcher
+│   │   ├── hn_source.rb      # Hacker News Algolia API
+│   │   └── claude_web_source.rb # Claude + web_search tool
 │   ├── audio_assembler.rb    # ffmpeg wrapper
 │   ├── rss_generator.rb      # RSS 2.0 feed
 │   └── logger.rb             # Structured logging
@@ -136,22 +173,30 @@ podgen/
 │   ├── orchestrator.rb       # Main pipeline entry point
 │   ├── run.sh                # launchd wrapper
 │   └── generate_rss.rb       # RSS generator runner
-├── output/episodes/          # Final MP3s
-└── logs/runs/                # Run logs
+├── output/<name>/episodes/   # Final MP3s per podcast
+└── logs/<name>/              # Run logs per podcast
 ```
 
 ## Testing Individual Components
 
 ```bash
-ruby scripts/test_research.rb    # Phase 2: Exa.ai search
-ruby scripts/test_script.rb      # Phase 3: Claude script generation
-ruby scripts/test_tts.rb         # Phase 4: ElevenLabs TTS
-ruby scripts/test_assembly.rb    # Phase 5: ffmpeg assembly
+ruby scripts/test_research.rb      # Exa.ai search
+ruby scripts/test_rss.rb           # RSS feed fetching
+ruby scripts/test_hn.rb            # Hacker News search
+ruby scripts/test_claude_web.rb    # Claude web search
+ruby scripts/test_script.rb        # Claude script generation
+ruby scripts/test_tts.rb           # ElevenLabs TTS
+ruby scripts/test_assembly.rb      # ffmpeg assembly
 ```
 
 ## Cost Estimate
 
-Per daily episode (~10 min):
-- Exa.ai: ~$0.03 (3 searches + summaries)
+Per daily episode (~10 min), with all sources enabled:
+- Exa.ai: ~$0.03 (4 searches + summaries)
 - Claude Opus 4.6: ~$0.15 (script generation)
+- Claude Haiku (web search): ~$0.08 (4 topics × web_search)
+- Hacker News: free (Algolia API)
+- RSS feeds: free
 - ElevenLabs: varies by plan ($22-99/month for daily use)
+
+With Exa only (default): ~$0.18 + ElevenLabs per episode.

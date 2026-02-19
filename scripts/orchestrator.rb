@@ -15,7 +15,7 @@ root = File.expand_path("..", __dir__)
 require_relative File.join(root, "lib", "podcast_config")
 require_relative File.join(root, "lib", "logger")
 require_relative File.join(root, "lib", "agents", "topic_agent")
-require_relative File.join(root, "lib", "agents", "research_agent")
+require_relative File.join(root, "lib", "source_manager")
 require_relative File.join(root, "lib", "agents", "script_agent")
 require_relative File.join(root, "lib", "agents", "tts_agent")
 require_relative File.join(root, "lib", "audio_assembler")
@@ -72,12 +72,16 @@ begin
   end
   logger.phase_end("Topics")
 
-  # --- Phase 1: Research ---
+  # --- Phase 1: Research (multi-source) ---
   logger.phase_start("Research")
-  research_agent = ResearchAgent.new(exclude_urls: history.recent_urls, logger: logger)
-  research_data = research_agent.research(topics)
+  source_manager = SourceManager.new(
+    source_config: config.sources,
+    exclude_urls: history.recent_urls,
+    logger: logger
+  )
+  research_data = source_manager.research(topics)
   total_findings = research_data.sum { |r| r[:findings].length }
-  logger.log("Research complete: #{total_findings} findings across #{topics.length} topics")
+  logger.log("Research complete: #{total_findings} findings across #{research_data.length} topics")
   logger.phase_end("Research")
 
   # --- Phase 2: Script generation ---
