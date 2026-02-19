@@ -42,7 +42,6 @@ class Podgen < Formula
     # Create default project skeleton at ~/.podgen
     podgen_home = Pathname.new(Dir.home) / ".podgen"
     (podgen_home / "podcasts").mkpath
-    (podgen_home / "assets").mkpath
     (podgen_home / "output").mkpath
     (podgen_home / "logs").mkpath
 
@@ -79,7 +78,7 @@ class Podgen < Formula
              mkdir -p ~/.podgen/podcasts/my_podcast
              # Add guidelines.md and queue.yml (see README)
         3. Optionally add intro/outro music:
-             cp intro.mp3 ~/.podgen/assets/intro.mp3
+             cp intro.mp3 ~/.podgen/podcasts/my_podcast/intro.mp3
         4. Generate an episode:
              podgen generate my_podcast
 

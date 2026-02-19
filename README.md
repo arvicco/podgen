@@ -176,11 +176,11 @@ CLAUDE_MODEL=claude-opus-4-6                   # Script generation model
 
 ### Intro/Outro Music
 
-Drop MP3 files into:
-- `assets/intro.mp3` — played before the first segment (3s fade-out)
-- `assets/outro.mp3` — played after the last segment (2s fade-in)
+Drop MP3 files into each podcast's directory:
+- `podcasts/<name>/intro.mp3` — played before the first segment (3s fade-out)
+- `podcasts/<name>/outro.mp3` — played after the last segment (2s fade-in)
 
-Both are optional. The pipeline skips them if the files don't exist.
+Both are optional per podcast. The pipeline skips them if the files don't exist.
 
 ### Research Sources
 
@@ -286,7 +286,7 @@ podgen/
 ├── podcasts/<name>/
 │   ├── guidelines.md         # Podcast format, style, & sources config
 │   └── queue.yml             # Fallback topic queue
-├── assets/                   # Intro/outro music (optional)
+├── assets/                   # (deprecated, use per-podcast intro/outro)
 ├── lib/
 │   ├── cli.rb                # CLI dispatcher (OptionParser)
 │   ├── cli/

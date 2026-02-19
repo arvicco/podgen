@@ -168,9 +168,8 @@ module PodgenCLI
           # of "name-2026-02-19-it".
           base_name = config.episode_basename(today)
 
-          project_root = PodcastConfig.root
-          intro_path = File.join(project_root, "assets", "intro.mp3")
-          outro_path = File.join(project_root, "assets", "outro.mp3")
+          intro_path = File.join(config.podcast_dir, "intro.mp3")
+          outro_path = File.join(config.podcast_dir, "outro.mp3")
           output_paths = []
 
           languages.each do |lang|

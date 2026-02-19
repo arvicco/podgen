@@ -105,8 +105,8 @@ begin
   # --- Phase 4: Audio assembly ---
   logger.phase_start("Assembly")
   output_path = config.episode_path(today)
-  intro_path = File.join(root, "assets", "intro.mp3")
-  outro_path = File.join(root, "assets", "outro.mp3")
+  intro_path = File.join(config.podcast_dir, "intro.mp3")
+  outro_path = File.join(config.podcast_dir, "outro.mp3")
 
   assembler = AudioAssembler.new(logger: logger)
   assembler.assemble(audio_paths, output_path, intro_path: intro_path, outro_path: outro_path)

@@ -23,7 +23,7 @@ podgen/
 │   ├── guidelines.md             # Format, tone, sources, languages
 │   ├── queue.yml                 # Fallback topics
 │   └── .env                      # Per-podcast overrides (optional, gitignored)
-├── assets/                       # intro.mp3, outro.mp3 (optional, shared)
+├── assets/                       # (deprecated — intro/outro now per-podcast)
 ├── lib/
 │   ├── cli.rb                    # CLI dispatcher (OptionParser + command registry)
 │   ├── cli/

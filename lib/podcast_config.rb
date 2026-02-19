@@ -4,12 +4,13 @@ require "fileutils"
 require "date"
 
 class PodcastConfig
-  attr_reader :name, :guidelines_path, :queue_path, :episodes_dir, :feed_path, :log_dir, :history_path
+  attr_reader :name, :podcast_dir, :guidelines_path, :queue_path, :episodes_dir, :feed_path, :log_dir, :history_path
 
   def initialize(name)
     @name = name
     @root = self.class.root
-    podcast_dir = File.join(@root, "podcasts", name)
+    @podcast_dir = File.join(@root, "podcasts", name)
+    podcast_dir = @podcast_dir
 
     unless Dir.exist?(podcast_dir)
       raise "Unknown podcast: #{name}. Available: #{self.class.available.join(', ')}"
