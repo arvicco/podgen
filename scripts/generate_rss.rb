@@ -33,7 +33,8 @@ puts
 generator = RssGenerator.new(
   episodes_dir: config.episodes_dir,
   feed_path: config.feed_path,
-  podcast_name: podcast_name
+  title: config.title,
+  author: config.author
 )
 feed_path = generator.generate
 

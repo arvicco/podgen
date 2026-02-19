@@ -44,6 +44,16 @@ class PodcastConfig
     @sources ||= parse_sources_section(guidelines)
   end
 
+  # Extracts "## Name" from guidelines.md, falls back to directory name
+  def title
+    @title ||= extract_heading("Name") || @name
+  end
+
+  # Extracts "## Author" from guidelines.md, falls back to "Podcast Agent"
+  def author
+    @author ||= extract_heading("Author") || "Podcast Agent"
+  end
+
   def queue_topics
     YAML.load_file(@queue_path)["topics"]
   end
@@ -93,6 +103,12 @@ class PodcastConfig
   end
 
   private
+
+  # Extracts the first line of content under a ## heading
+  def extract_heading(heading)
+    match = guidelines.match(/^## #{Regexp.escape(heading)}\s*\n(.+?)(?:\n|$)/)
+    match ? match[1].strip : nil
+  end
 
   def parse_sources_section(text)
     default = { "exa" => true }

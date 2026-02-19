@@ -5,12 +5,12 @@ require "date"
 require "fileutils"
 
 class RssGenerator
-  def initialize(episodes_dir:, feed_path:, podcast_name: nil, logger: nil)
+  def initialize(episodes_dir:, feed_path:, title: "Podcast", author: "Podcast Agent", logger: nil)
     @logger = logger
     @episodes_dir = episodes_dir
     @feed_path = feed_path
-    @title = ENV.fetch("PODCAST_TITLE") { podcast_name || "Podcast" }
-    @author = ENV.fetch("PODCAST_AUTHOR", "Podcast Agent")
+    @title = title
+    @author = author
   end
 
   def generate

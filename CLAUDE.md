@@ -175,10 +175,9 @@ segments: [
 Each podcast lives in `podcasts/<name>/` with these files:
 ### podcasts/<name>/.env — per-podcast overrides (optional, gitignored):
 ```
-PODCAST_TITLE=My Podcast
-PODCAST_AUTHOR=Author Name
 # Override voice/model for this podcast:
 # ELEVENLABS_VOICE_ID=
+# ELEVENLABS_MODEL_ID=
 # CLAUDE_MODEL=
 ```
 ### podcasts/<name>/guidelines.md — example:
@@ -186,6 +185,8 @@ PODCAST_AUTHOR=Author Name
 # Podcast Guidelines
 ## Name
 My Podcast Name
+## Author
+Author Name
 ## Format
 - Target length: 10–12 minutes
 - Open with a 60-second news brief covering the most interesting recent development
@@ -232,12 +233,11 @@ CLAUDE_MODEL=claude-opus-4-6
 ```
 ### Per-podcast .env — podcasts/<name>/.env overrides (all optional):
 ```
-PODCAST_TITLE=
-PODCAST_AUTHOR=
 ELEVENLABS_VOICE_ID=    # use a different voice
 ELEVENLABS_MODEL_ID=    # use a different TTS model
 CLAUDE_MODEL=           # use a different Claude model
 ```
+Podcast title and author are defined in `guidelines.md` via `## Name` and `## Author` headings.
 Per-podcast `.env` is loaded via `Dotenv.overload` after the root `.env`, so any
 key set there takes precedence for that podcast's pipeline run.
 ---
