@@ -10,8 +10,8 @@
 class Podgen < Formula
   desc "Autonomous podcast generation pipeline"
   homepage "https://github.com/arvicco/homebrew-podgen"
-  url "https://github.com/arvicco/homebrew-podgen/archive/refs/tags/v1.2.0.tar.gz"
-  sha256 "c1ca16e5c6406d0748d6b1afb59874bb1e68525de59a085a03e2bfdaa1cf48b6"
+  url "https://github.com/arvicco/homebrew-podgen/archive/refs/tags/v1.3.0.tar.gz"
+  sha256 "b02c2edd44e307108a722cfc2b9138707aeb30033362a0f8df01daa1fa515546"
   license "MIT"
 
   depends_on "ffmpeg"
@@ -62,6 +62,8 @@ class Podgen < Formula
         BLUESKY_APP_PASSWORD=
         # Optional: X/Twitter source via SocialData.tools (~$0.01/run)
         SOCIALDATA_API_KEY=
+        # Optional: Language pipeline (OpenAI Whisper transcription)
+        OPENAI_API_KEY=
       ENV
     end
   end
