@@ -109,6 +109,14 @@ dur3 = assembler.probe_duration(after_bp)
 puts "  Duration: #{trim_input_dur.round(1)}s → #{dur3.round(1)}s"
 puts "  Saved: #{after_bp}"
 
+# --- Phase 3b: Save the bit that bandpass would cut from the end ---
+if bp_end < trim_input_dur
+  cut_tail = File.join(OUTPUT_DIR, "4_cut_tail.mp3")
+  assembler.extract_segment(trim_input, cut_tail, bp_end, trim_input_dur)
+  puts "  Saved cut tail: #{cut_tail} (#{(trim_input_dur - bp_end).round(1)}s)"
+  puts "  → Listen to this to hear what's being removed from the end"
+end
+
 # --- Summary ---
 puts "\n=== Summary ==="
 puts "  Original:         #{dur.round(1)}s"
