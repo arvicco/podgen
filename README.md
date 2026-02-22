@@ -291,6 +291,34 @@ Set `type: language` in `## Podcast` and configure `## Audio` in `podcasts/<name
 - Music detection uses bandpass filtering (300-3000 Hz) for intros and silence detection for outros
 - Default transcription model is `gpt-4o-mini-transcribe` (set `WHISPER_MODEL=whisper-1` for timestamps/segments)
 
+### LingQ Upload
+
+The language pipeline can automatically upload episodes to [LingQ](https://www.lingq.com/) as lessons. Add a `## LingQ` section to your guidelines.md and set `LINGQ_API_KEY` in your `.env`:
+
+```markdown
+## LingQ
+- collection: 2629430
+- level: 3
+- tags: otroci, pravljice
+- status: private
+- image: lahko.jpg
+- base_image: lahko_no_text.jpg
+- font: Patrick Hand
+- font_color: #2B3A67
+- font_size: 126
+- text_width: 980
+- text_x_offset: 200
+- text_y_offset: 0
+```
+
+- `collection` (required): LingQ collection/course ID
+- `level` / `tags` / `status`: lesson metadata
+- `image`: static cover image (relative to podcast directory)
+- `base_image`: if set, generates per-episode covers by overlaying the episode title onto this image via ImageMagick
+- `font`, `font_color`, `font_size`, `text_width`, `text_x_offset`, `text_y_offset`: text overlay styling
+- Upload is non-fatal — the pipeline continues if it fails
+- Cover generation requires `imagemagick` + `librsvg` (`brew install imagemagick librsvg`) and fonts via `fontconfig`; falls back to static `image` if unavailable
+
 ## Scheduling (launchd)
 
 Run the installer to set up daily generation at 6:00 AM:
