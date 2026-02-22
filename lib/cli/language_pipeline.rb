@@ -76,10 +76,15 @@ module PodgenCLI
       end
 
       # --- Phase 3: Bandpass trim (remove intro/outro music) ---
+      # When skip_intro is set, it already handled the intro jingle — only detect outro.
       logger.phase_start("Trim Music")
       assembler ||= AudioAssembler.new(logger: logger)
       bp_start, bp_end = assembler.estimate_speech_boundaries(source_audio_path)
-      bp_start = [bp_start - 3, 0].max # extra padding — greeting sits at music boundary
+      if @config.skip_intro && @config.skip_intro > 0
+        bp_start = 0
+      else
+        bp_start = [bp_start - 3, 0].max # extra padding — greeting sits at music boundary
+      end
 
       trimmed_path = File.join(Dir.tmpdir, "podgen_trimmed_#{Process.pid}.mp3")
       @temp_files << trimmed_path
