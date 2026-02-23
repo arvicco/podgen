@@ -120,11 +120,13 @@ class RssGenerator
 
       add_text(item, "guid", ep[:filename])
 
-      # Add transcript link if HTML version exists
+      # Add transcript link if HTML version exists (transcript or script)
       if @base_url
-        transcript_name = File.basename(ep[:filename], ".mp3") + "_transcript.html"
-        transcript_path = File.join(@episodes_dir, transcript_name)
-        if File.exist?(transcript_path)
+        ep_base = File.basename(ep[:filename], ".mp3")
+        transcript_name = %w[_transcript.html _script.html]
+          .map { |suffix| ep_base + suffix }
+          .find { |name| File.exist?(File.join(@episodes_dir, name)) }
+        if transcript_name
           item.add_element("podcast:transcript", {
             "url" => "#{@base_url}/episodes/#{transcript_name}",
             "type" => "text/html"

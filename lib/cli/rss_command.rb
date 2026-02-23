@@ -94,7 +94,7 @@ module PodgenCLI
     private
 
     def convert_transcripts(episodes_dir)
-      Dir.glob(File.join(episodes_dir, "*_transcript.md")).each do |md_path|
+      Dir.glob(File.join(episodes_dir, "*_{transcript,script}.md")).each do |md_path|
         html_path = md_path.sub(/\.md$/, ".html")
         next if File.exist?(html_path) && File.mtime(html_path) >= File.mtime(md_path)
 
