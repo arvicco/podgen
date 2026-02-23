@@ -3,6 +3,7 @@
 root = File.expand_path("../..", __dir__)
 
 require "optparse"
+require "fileutils"
 require_relative File.join(root, "lib", "podcast_config")
 require_relative File.join(root, "lib", "rss_generator")
 
@@ -35,6 +36,17 @@ module PodgenCLI
 
       base_url = @options[:base_url] || config.base_url
 
+      # Copy cover image from podcast config dir to output dir
+      if config.image
+        src = File.join(config.podcast_dir, config.image)
+        if File.exist?(src)
+          dest = File.join(File.dirname(config.feed_path), config.image)
+          FileUtils.cp(src, dest)
+        else
+          $stderr.puts "Warning: image '#{config.image}' not found in #{config.podcast_dir}"
+        end
+      end
+
       feed_paths = []
 
       config.languages.each do |lang|
@@ -50,9 +62,11 @@ module PodgenCLI
           episodes_dir: config.episodes_dir,
           feed_path: feed_path,
           title: config.title,
+          description: config.description,
           author: config.author,
           language: lang_code,
           base_url: base_url,
+          image: config.image,
           history_path: config.history_path
         )
         generator.generate

@@ -132,7 +132,7 @@ language_pipeline.rb:
 ### guidelines.md sections
 | Section | Required | Description |
 |---------|----------|-------------|
-| `## Podcast` | No | Key-value list: `name` (fallback: dir name), `type` (`news`/`language`, default: news), `author` (fallback: "Podcast Agent"), `language` (sub-list: `- en`, `- it: <voice_id>`, default: `[en]`), `base_url` (for RSS enclosure URLs, e.g. `https://host.ts.net/podcast`) |
+| `## Podcast` | No | Key-value list: `name` (fallback: dir name), `type` (`news`/`language`, default: news), `author` (fallback: "Podcast Agent"), `description` (RSS feed description), `language` (sub-list: `- en`, `- it: <voice_id>`, default: `[en]`), `base_url` (for RSS enclosure URLs, e.g. `https://host.ts.net/podcast`), `image` (cover artwork filename, must be in `podcasts/<name>/`, copied to output on `podgen rss`) |
 | `## Format` | Yes | Length, segment structure, pacing |
 | `## Tone` | Yes | Voice and style directions |
 | `## Topics` | Yes (news) | Default topic rotation |

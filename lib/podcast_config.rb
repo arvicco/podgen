@@ -67,9 +67,19 @@ class PodcastConfig
     @type ||= podcast_section[:type] || extract_heading("Type") || "news"
   end
 
+  # Extracts description from ## Podcast section
+  def description
+    @description ||= podcast_section[:description]
+  end
+
   # Extracts base_url from ## Podcast section (for RSS enclosure URLs)
   def base_url
     @base_url ||= podcast_section[:base_url]
+  end
+
+  # Extracts image from ## Podcast section (for RSS feed artwork)
+  def image
+    @image ||= podcast_section[:image]
   end
 
   # Extracts target_language from ## Audio (new) or ## Target Language (legacy)

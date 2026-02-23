@@ -6,14 +6,16 @@ require "fileutils"
 require "yaml"
 
 class RssGenerator
-  def initialize(episodes_dir:, feed_path:, title: "Podcast", author: "Podcast Agent", language: "en", base_url: nil, history_path: nil, logger: nil)
+  def initialize(episodes_dir:, feed_path:, title: "Podcast", description: nil, author: "Podcast Agent", language: "en", base_url: nil, image: nil, history_path: nil, logger: nil)
     @logger = logger
     @episodes_dir = episodes_dir
     @feed_path = feed_path
     @title = title
+    @description = description
     @author = author
     @language = language
     @base_url = base_url&.chomp("/")
+    @image = image
     @title_map = build_title_map(history_path)
   end
 
@@ -82,11 +84,20 @@ class RssGenerator
 
     channel = rss.add_element("channel")
     add_text(channel, "title", @title)
-    add_text(channel, "description", "Auto-generated podcast by Podcast Agent")
+    add_text(channel, "description", @description || "Podcast by #{@author}")
     add_text(channel, "link", @base_url) if @base_url
     add_text(channel, "language", @language)
     add_text(channel, "generator", "Podcast Agent (podgen)")
     add_text(channel, "itunes:author", @author)
+    if @image && @base_url
+      image_url = "#{@base_url}/#{@image}"
+      itunes_image = channel.add_element("itunes:image")
+      itunes_image.add_attribute("href", image_url)
+      rss_image = channel.add_element("image")
+      add_text(rss_image, "url", image_url)
+      add_text(rss_image, "title", @title)
+      add_text(rss_image, "link", @base_url)
+    end
     add_text(channel, "itunes:explicit", "false")
     add_text(channel, "lastBuildDate", Time.now.strftime("%a, %d %b %Y %H:%M:%S %z"))
 
