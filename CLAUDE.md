@@ -37,7 +37,7 @@ podgen/
 │   │   ├── generate_command.rb   # Pipeline dispatcher: news or language (based on type in ## Podcast)
 │   │   ├── language_pipeline.rb  # Language pipeline: RSS → download → trim → transcribe → assemble
 │   │   ├── scrap_command.rb     # Remove last episode + history entry
-│   │   ├── rss_command.rb        # RSS feed generation
+│   │   ├── rss_command.rb        # RSS feed generation + cover copy + transcript conversion
 │   │   ├── list_command.rb       # List available podcasts
 │   │   ├── test_command.rb       # Delegates to scripts/test_*.rb
 │   │   └── schedule_command.rb   # Installs launchd plist
@@ -68,13 +68,16 @@ podgen/
 │   │   └── x_source.rb          # X (Twitter) via SocialData.tools API
 │   ├── episode_history.rb        # Episode dedup (atomic YAML writes, 7-day lookback)
 │   ├── audio_assembler.rb        # ffmpeg wrapper (crossfades, loudnorm, music detection/stripping)
-│   ├── rss_generator.rb          # RSS 2.0 XML feed
+│   ├── rss_generator.rb          # RSS 2.0 + iTunes + Podcasting 2.0 feed (cover, transcripts)
 │   └── logger.rb                 # Structured run logging with phase timings
-├── scripts/                      # Legacy entry points + test scripts
+├── scripts/
+│   ├── serve.rb                  # WEBrick static file server (correct MIME types for mp3/xml/md)
+│   └── test_*.rb                 # Test scripts
 ├── output/<name>/
 │   ├── episodes/                 # MP3s + scripts/transcripts: {name}-{date}[-lang].mp3
 │   ├── research_cache/           # Cached research results (auto-managed)
 │   ├── history.yml               # Episode history for deduplication
+│   ├── cover.jpg                 # Podcast cover (copied from podcasts/<name>/ by rss command)
 │   └── feed.xml                  # RSS feed
 └── logs/<name>/                  # Per-podcast run logs
 ```
@@ -122,6 +125,7 @@ language_pipeline.rb:
 - **Transcript post-processing:** Claude Opus processes all transcripts. Multi-engine (2+ engines): reconciles sentence-by-sentence, picks best rendering, removes hallucination artifacts. Single engine: cleans up grammar, punctuation, and STT artifacts. Result becomes primary transcript. Non-fatal if post-processing fails.
 - **LingQ upload:** Language pipeline auto-uploads lessons if `## LingQ` section (with `collection`) and `LINGQ_API_KEY` are present. Uploads audio + transcript, triggers timestamp generation. Non-fatal on failure.
 - **Cover generation:** If `base_image` is configured in `## LingQ`, generates per-episode cover images by overlaying the uppercased episode title onto the base image via ImageMagick. Falls back to static `image` if generation fails or ImageMagick is not installed. Non-fatal.
+- **RSS feed:** `podgen rss <name>` generates feed with iTunes + Podcasting 2.0 namespaces. Copies cover image from `podcasts/<name>/` to output. Converts markdown transcripts to HTML and adds `<podcast:transcript>` tags. Episode titles pulled from `history.yml`. `base_url` from config ensures correct absolute enclosure URLs.
 - **`--dry-run`:** Validates config, uses queue.yml topics, generates synthetic data, saves debug script, skips all API calls/TTS/assembly/history/LingQ upload.
 - **Lockfile:** Prevents concurrent runs of the same podcast via `flock`.
 
@@ -168,13 +172,33 @@ language_pipeline.rb:
 podgen [flags] <command> <args>
   generate <podcast>   # Full pipeline
   scrap <podcast>      # Remove last episode + history entry
-  rss <podcast>        # Generate RSS feed
+  rss <podcast>        # Generate RSS feed (--base-url URL to override config)
   list                 # List podcasts
   test <name>          # Run test (research|rss|hn|claude_web|bluesky|x|script|tts|assembly|translation|transcription|sources|cover)
   schedule <podcast>   # Install launchd scheduler
 
 Flags: -v/--verbose  -q/--quiet  --dry-run  -V/--version  -h/--help
 ```
+
+---
+
+## Serving RSS Externally (Tailscale Funnel)
+
+Podcasts can be served externally via Tailscale Funnel, which provides a public HTTPS URL without port forwarding or domain setup.
+
+### Setup steps
+1. **Install Tailscale:** `brew install tailscale` — start with `sudo tailscaled` + `tailscale up`
+2. **Enable HTTPS + Funnel in admin console:** [Tailscale Admin → DNS](https://login.tailscale.com/admin/dns) — enable MagicDNS and HTTPS certificates. Then [Access Controls](https://login.tailscale.com/admin/acls/file) — add `"nodeAttrs": [{"target": ["*"], "attr": ["funnel"]}]`
+3. **Provision HTTPS cert:** `tailscale cert <hostname>.ts.net` (generates `.crt` + `.key` files)
+4. **Start local server:** `ruby scripts/serve.rb 8080` — serves `output/` with correct MIME types
+5. **Start funnel:** `tailscale funnel 8080` — exposes port 8080 at `https://<hostname>.ts.net`
+6. **Configure podcast:** Add `base_url: https://<hostname>.ts.net/<podcast>` to `## Podcast` section in guidelines.md
+7. **Generate feed:** `podgen rss <podcast>` — feed URL: `https://<hostname>.ts.net/<podcast>/feed.xml`
+
+### Notes
+- Chrome may show `NET::ERR_CERTIFICATE_TRANSPARENCY_REQUIRED` — works fine in Safari, Firefox, and podcast apps
+- Tailscale Funnel requires the machine to be online and the server running
+- `scripts/serve.rb` serves mp3 as `audio/mpeg`, xml as `application/rss+xml`, md as `text/markdown`
 
 ---
 
