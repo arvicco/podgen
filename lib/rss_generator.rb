@@ -79,7 +79,8 @@ class RssGenerator
     rss = doc.add_element("rss", {
       "version" => "2.0",
       "xmlns:itunes" => "http://www.itunes.com/dtds/podcast-1.0.dtd",
-      "xmlns:content" => "http://purl.org/rss/1.0/modules/content/"
+      "xmlns:content" => "http://purl.org/rss/1.0/modules/content/",
+      "xmlns:podcast" => "https://podcastindex.org/namespace/1.0"
     })
 
     channel = rss.add_element("channel")
@@ -118,6 +119,18 @@ class RssGenerator
       })
 
       add_text(item, "guid", ep[:filename])
+
+      # Add transcript link if HTML version exists
+      if @base_url
+        transcript_name = File.basename(ep[:filename], ".mp3") + "_transcript.html"
+        transcript_path = File.join(@episodes_dir, transcript_name)
+        if File.exist?(transcript_path)
+          item.add_element("podcast:transcript", {
+            "url" => "#{@base_url}/episodes/#{transcript_name}",
+            "type" => "text/html"
+          })
+        end
+      end
     end
 
     doc
