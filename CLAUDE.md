@@ -38,6 +38,7 @@ podgen/
 │   │   ├── language_pipeline.rb  # Language pipeline: RSS → download → transcribe → trim outro → assemble
 │   │   ├── scrap_command.rb     # Remove last episode + history entry
 │   │   ├── rss_command.rb        # RSS feed generation + cover copy + transcript conversion
+│   │   ├── publish_command.rb    # Publish podcast output to Cloudflare R2 via rclone
 │   │   ├── list_command.rb       # List available podcasts
 │   │   ├── test_command.rb       # Delegates to scripts/test_*.rb
 │   │   └── schedule_command.rb   # Installs launchd plist
@@ -136,6 +137,7 @@ language_pipeline.rb:
 - **RSS feed:** `podgen rss <name>` generates feed with iTunes + Podcasting 2.0 namespaces. Copies cover image from `podcasts/<name>/` to output. Converts markdown transcripts to HTML and adds `<podcast:transcript>` tags. Episode titles pulled from `history.yml`. `base_url` from config ensures correct absolute enclosure URLs.
 - **`--dry-run`:** Validates config, uses queue.yml topics, generates synthetic data, saves debug script, skips all API calls/TTS/assembly/history/LingQ upload.
 - **Lockfile:** Prevents concurrent runs of the same podcast via `flock`.
+- **Publish:** `podgen publish <name>` syncs public-facing files (MP3s, HTML transcripts, feed XML, cover) to Cloudflare R2 via `rclone`. Uses env-based rclone config (no `rclone config` needed). Supports `--dry-run` and `-v`.
 
 ---
 
@@ -154,7 +156,7 @@ language_pipeline.rb:
 | `## Do not include` | No | Content restrictions |
 
 ### Environment variables
-**Root `.env`:** `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID` (default: eleven_multilingual_v2), `ELEVENLABS_OUTPUT_FORMAT` (default: mp3_44100_128), `ELEVENLABS_SCRIBE_MODEL` (default: scribe_v2), `EXA_API_KEY`, `CLAUDE_MODEL` (default: claude-opus-4-6), `CLAUDE_WEB_MODEL` (default: claude-haiku-4-5-20251001), `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD`, `SOCIALDATA_API_KEY`, `OPENAI_API_KEY` (language pipeline), `WHISPER_MODEL` (default: gpt-4o-mini-transcribe), `GROQ_API_KEY`, `GROQ_WHISPER_MODEL` (default: whisper-large-v3), `LINGQ_API_KEY` (language pipeline LingQ upload)
+**Root `.env`:** `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL_ID` (default: eleven_multilingual_v2), `ELEVENLABS_OUTPUT_FORMAT` (default: mp3_44100_128), `ELEVENLABS_SCRIBE_MODEL` (default: scribe_v2), `EXA_API_KEY`, `CLAUDE_MODEL` (default: claude-opus-4-6), `CLAUDE_WEB_MODEL` (default: claude-haiku-4-5-20251001), `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD`, `SOCIALDATA_API_KEY`, `OPENAI_API_KEY` (language pipeline), `WHISPER_MODEL` (default: gpt-4o-mini-transcribe), `GROQ_API_KEY`, `GROQ_WHISPER_MODEL` (default: whisper-large-v3), `LINGQ_API_KEY` (language pipeline LingQ upload), `R2_ACCESS_KEY_ID` (publish command), `R2_SECRET_ACCESS_KEY` (publish command), `R2_ENDPOINT` (publish command, e.g. `https://<account_id>.r2.cloudflarestorage.com`), `R2_BUCKET` (publish command)
 
 **Per-podcast `.env`** (optional): overrides any root `.env` variable. Loaded via `Dotenv.overload`.
 
@@ -181,6 +183,7 @@ podgen [flags] <command> <args>
   generate <podcast>   # Full pipeline
   scrap <podcast>      # Remove last episode + history entry
   rss <podcast>        # Generate RSS feed (--base-url URL to override config)
+  publish <podcast>    # Publish to Cloudflare R2 via rclone
   list                 # List podcasts
   test <name>          # Run test (research|rss|hn|claude_web|bluesky|x|script|tts|assembly|translation|transcription|sources|cover)
   schedule <podcast>   # Install launchd scheduler

@@ -8,6 +8,7 @@ module PodgenCLI
     "generate"  => ["Run the full podcast pipeline",       "cli/generate_command",  "GenerateCommand"],
     "scrap"     => ["Remove last episode and history",     "cli/scrap_command",     "ScrapCommand"],
     "rss"       => ["Generate RSS feed for a podcast",     "cli/rss_command",       "RssCommand"],
+    "publish"   => ["Publish podcast to Cloudflare R2",    "cli/publish_command",   "PublishCommand"],
     "list"      => ["List available podcasts",             "cli/list_command",      "ListCommand"],
     "test"      => ["Run a standalone test script",        "cli/test_command",      "TestCommand"],
     "schedule"  => ["Install launchd scheduler",           "cli/schedule_command",  "ScheduleCommand"]
@@ -25,6 +26,7 @@ module PodgenCLI
       opts.separator "  generate <podcast>             Run the full pipeline (news or language)"
       opts.separator "  scrap <podcast>                Remove last episode files + history entry"
       opts.separator "  rss <podcast>                  Generate RSS feed"
+      opts.separator "  publish <podcast>              Publish to Cloudflare R2"
       opts.separator "  list                           List available podcasts"
       opts.separator "  test <name> [args]             Run a standalone test"
       opts.separator "  schedule <podcast>             Install launchd scheduler"
