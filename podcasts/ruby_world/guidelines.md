@@ -3,6 +3,8 @@
 ## Podcast
 - name: Ruby World
 - author: Ruby Boy
+- base_url: https://media.fulgur.news/ruby_world
+- image: cover.jpg
 - language:
   - en
   - ja: rrBxvYLJSqEU0KHpFpRp

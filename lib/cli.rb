@@ -9,6 +9,8 @@ module PodgenCLI
     "scrap"     => ["Remove last episode and history",     "cli/scrap_command",     "ScrapCommand"],
     "rss"       => ["Generate RSS feed for a podcast",     "cli/rss_command",       "RssCommand"],
     "publish"   => ["Publish podcast to Cloudflare R2",    "cli/publish_command",   "PublishCommand"],
+    "stats"     => ["Show podcast statistics",             "cli/stats_command",     "StatsCommand"],
+    "validate"  => ["Validate podcast config and output",  "cli/validate_command",  "ValidateCommand"],
     "list"      => ["List available podcasts",             "cli/list_command",      "ListCommand"],
     "test"      => ["Run a standalone test script",        "cli/test_command",      "TestCommand"],
     "schedule"  => ["Install launchd scheduler",           "cli/schedule_command",  "ScheduleCommand"]
@@ -27,6 +29,8 @@ module PodgenCLI
       opts.separator "  scrap <podcast>                Remove last episode files + history entry"
       opts.separator "  rss <podcast>                  Generate RSS feed"
       opts.separator "  publish <podcast>              Publish to Cloudflare R2"
+      opts.separator "  stats <podcast> | --all        Show podcast statistics"
+      opts.separator "  validate <podcast> | --all     Validate config and output"
       opts.separator "  list                           List available podcasts"
       opts.separator "  test <name> [args]             Run a standalone test"
       opts.separator "  schedule <podcast>             Install launchd scheduler"

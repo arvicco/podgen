@@ -184,6 +184,8 @@ podgen [flags] <command> <args>
   scrap <podcast>      # Remove last episode + history entry
   rss <podcast>        # Generate RSS feed (--base-url URL to override config)
   publish <podcast>    # Publish to Cloudflare R2 via rclone
+  stats <podcast>      # Show podcast statistics (--all for summary table)
+  validate <podcast>   # Validate config and output (--all for all podcasts)
   list                 # List podcasts
   test <name>          # Run test (research|rss|hn|claude_web|bluesky|x|script|tts|assembly|translation|transcription|sources|cover)
   schedule <podcast>   # Install launchd scheduler
