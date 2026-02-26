@@ -100,7 +100,8 @@ module PodgenCLI
             intro_path: intro_path,
             outro_path: outro_path,
             podcast_title: config.title,
-            author: config.author
+            author: config.author,
+            pronunciation_pls_path: config.pronunciation_pls_path
           )
           translated += 1
           puts "done (#{idx + 1}/#{pending.length})" unless @options[:verbosity] == :quiet
@@ -157,7 +158,7 @@ module PodgenCLI
       pending
     end
 
-    def translate_episode(script_path:, basename:, lang_code:, voice_id:, episodes_dir:, intro_path:, outro_path:, podcast_title:, author:)
+    def translate_episode(script_path:, basename:, lang_code:, voice_id:, episodes_dir:, intro_path:, outro_path:, podcast_title:, author:, pronunciation_pls_path: nil)
       script = parse_script(script_path)
 
       # Translate
@@ -169,7 +170,7 @@ module PodgenCLI
       save_script(lang_script, lang_script_path)
 
       # TTS
-      tts_agent = TTSAgent.new(voice_id_override: voice_id)
+      tts_agent = TTSAgent.new(voice_id_override: voice_id, pronunciation_pls_path: pronunciation_pls_path)
       audio_paths = tts_agent.synthesize(lang_script[:segments])
 
       # Assemble

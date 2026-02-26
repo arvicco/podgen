@@ -28,6 +28,8 @@ podgen/
 ├── podcasts/<name>/              # Per-podcast config
 │   ├── guidelines.md             # Format, tone, sources, languages
 │   ├── queue.yml                 # Fallback topics
+│   ├── pronunciation.pls         # TTS pronunciation overrides (optional, PLS/XML format)
+│   ├── pronunciation.yml         # Cached dictionary ID from ElevenLabs (auto-generated)
 │   └── .env                      # Per-podcast overrides (optional, gitignored)
 ├── assets/                       # (deprecated — intro/outro now per-podcast)
 ├── lib/
@@ -57,7 +59,7 @@ podgen/
 │   │   ├── topic_agent.rb        # Claude topic generation
 │   │   ├── research_agent.rb     # Exa.ai search
 │   │   ├── script_agent.rb       # Claude script generation (structured output)
-│   │   ├── tts_agent.rb          # ElevenLabs TTS (chunking, UTF-8-safe splitting)
+│   │   ├── tts_agent.rb          # ElevenLabs TTS (chunking, UTF-8-safe splitting, pronunciation dictionaries, trailing hallucination trimming)
 │   │   ├── translation_agent.rb  # Claude script translation
 │   │   ├── transcription_agent.rb # Backward-compat shim → Transcription::OpenaiEngine
 │   │   ├── lingq_agent.rb        # LingQ lesson upload (language pipeline)
@@ -72,6 +74,8 @@ podgen/
 │   ├── audio_assembler.rb        # ffmpeg wrapper (crossfades, loudnorm, trim, extract)
 │   ├── rss_generator.rb          # RSS 2.0 + iTunes + Podcasting 2.0 feed (cover, transcripts)
 │   └── logger.rb                 # Structured run logging with phase timings
+├── docs/
+│   └── pronunciation.md          # PLS format guide, IPA reference, alias vs phoneme rules
 ├── Rakefile                      # rake test, rake test:unit, test:integration, test:api
 ├── test/
 │   ├── test_helper.rb            # Minitest setup, skip helpers
@@ -143,6 +147,8 @@ language_pipeline.rb:
 - **Outro detection:** In multi-engine mode with Groq, the reconciled text (hallucination-free) is mapped back to Groq's word-level timestamps to find precise speech end. Audio is trimmed at speech_end + 2s; the tail is saved to `output/<podcast>/tails/` for review. Requires 2+ engines with "groq" included. Single engine or no Groq → no outro detection.
 - **LingQ upload:** Requires `--lingq` flag. Two modes: (1) `podgen generate <name> --lingq` uploads during generation (same as before, non-fatal). (2) `podgen publish <name> --lingq` bulk-uploads all un-uploaded episodes from episodes dir. Tracks uploads in `output/<podcast>/lingq_uploads.yml` (keyed by collection ID → base_name → lesson_id). Switching `collection` in config uploads to the new collection without losing previous tracking. Supports `--dry-run`.
 - **Cover generation:** If `base_image` is configured in `## LingQ`, generates per-episode cover images by overlaying the uppercased episode title onto the base image via ImageMagick. Falls back to static `image` if generation fails or ImageMagick is not installed. Non-fatal.
+- **Pronunciation dictionaries:** Optional `podcasts/<name>/pronunciation.pls` file with alias or IPA rules for mispronounced terms. Uploaded to ElevenLabs on first TTS run; cached in `pronunciation.yml` (re-uploads when PLS file changes). Alias rules work with all models; IPA phoneme rules only work with `eleven_flash_v2`/`eleven_turbo_v2`/`eleven_monolingual_v1`. Max 3 dictionaries per request. Non-fatal if upload fails. See `docs/pronunciation.md` for PLS format and IPA reference.
+- **TTS trailing hallucination trimming:** TTSAgent uses `/with-timestamps` endpoint to get character-level alignment. Audio after the last character's end time + 0.5s threshold is replaced with silence (preserving segment duration/pacing). Logged per-chunk.
 - **RSS feed:** `podgen rss <name>` generates feed with iTunes + Podcasting 2.0 namespaces. Copies cover image from `podcasts/<name>/` to output. Converts markdown transcripts and scripts to HTML and adds `<podcast:transcript>` tags. Episode titles pulled from `history.yml`. `base_url` from config ensures correct absolute enclosure URLs.
 - **`--dry-run`:** Validates config, uses queue.yml topics, generates synthetic data, saves debug script, skips all API calls/TTS/assembly/history/LingQ upload.
 - **Lockfile:** Prevents concurrent runs of the same podcast via `flock`.

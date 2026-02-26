@@ -82,6 +82,12 @@ class PodcastConfig
     @image ||= podcast_section[:image]
   end
 
+  # Returns path to pronunciation.pls if it exists in the podcast directory, nil otherwise
+  def pronunciation_pls_path
+    path = File.join(@podcast_dir, "pronunciation.pls")
+    File.exist?(path) ? path : nil
+  end
+
   # Extracts target_language from ## Audio (new) or ## Target Language (legacy)
   def target_language
     @target_language ||= audio_section[:target_language] || extract_heading("Target Language")

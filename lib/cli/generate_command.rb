@@ -200,7 +200,7 @@ module PodgenCLI
 
               # --- TTS ---
               logger.phase_start("TTS (#{lang_code})")
-              tts_agent = TTSAgent.new(logger: logger, voice_id_override: voice_id)
+              tts_agent = TTSAgent.new(logger: logger, voice_id_override: voice_id, pronunciation_pls_path: config.pronunciation_pls_path)
               audio_paths = tts_agent.synthesize(lang_script[:segments])
               logger.log("TTS complete (#{lang_code}): #{audio_paths.length} audio files")
               logger.phase_end("TTS (#{lang_code})")

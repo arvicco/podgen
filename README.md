@@ -215,6 +215,38 @@ Drop MP3 files into each podcast's directory:
 
 Both are optional per podcast. The pipeline skips them if the files don't exist.
 
+### Pronunciation Dictionary
+
+If ElevenLabs mispronounces certain terms (acronyms, proper nouns, technical jargon), you can add a pronunciation dictionary to correct them.
+
+Create `podcasts/<name>/pronunciation.pls` with alias rules:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<lexicon version="1.0"
+    xmlns="http://www.w3.org/2005/01/pronunciation-lexicon"
+    alphabet="ipa" xml:lang="en-US">
+
+  <lexeme>
+    <grapheme>UTXO</grapheme>
+    <alias>you tee ex oh</alias>
+  </lexeme>
+
+  <lexeme>
+    <grapheme>sats</grapheme>
+    <alias>sahts</alias>
+  </lexeme>
+
+</lexicon>
+```
+
+- The dictionary is automatically uploaded to ElevenLabs on the first TTS run
+- Changes are detected via SHA256 and re-uploaded automatically
+- **Alias rules** (recommended): replace the written word with a phonetic respelling — works with all ElevenLabs models
+- **IPA phoneme rules**: specify exact pronunciation via IPA symbols — only works with `eleven_flash_v2`/`eleven_turbo_v2`/`eleven_monolingual_v1`
+- Case-sensitive: `Bitcoin` and `bitcoin` are separate entries
+- See `docs/pronunciation.md` for the full PLS format guide, IPA reference, and tips
+
 ### Research Sources
 
 Research is modular — each podcast can enable different sources via a `## Sources` section in its `guidelines.md`. If the section is omitted, only Exa.ai is used (backward compatible).
@@ -423,7 +455,8 @@ podgen/
 │   └── podgen               # CLI executable
 ├── podcasts/<name>/
 │   ├── guidelines.md         # Podcast format, style, & sources config
-│   └── queue.yml             # Fallback topic queue
+│   ├── queue.yml             # Fallback topic queue
+│   └── pronunciation.pls     # TTS pronunciation overrides (optional)
 ├── assets/                   # (deprecated, use per-podcast intro/outro)
 ├── lib/
 │   ├── cli.rb                # CLI dispatcher (OptionParser)
@@ -441,7 +474,7 @@ podgen/
 │   │   ├── topic_agent.rb    # Claude topic generation
 │   │   ├── research_agent.rb # Exa.ai search
 │   │   ├── script_agent.rb   # Claude script generation
-│   │   ├── tts_agent.rb      # ElevenLabs TTS
+│   │   ├── tts_agent.rb      # ElevenLabs TTS (pronunciation dictionaries, hallucination trimming)
 │   │   ├── translation_agent.rb # Claude script translation
 │   │   └── transcription_agent.rb # OpenAI Whisper transcription
 │   ├── sources/
@@ -452,6 +485,8 @@ podgen/
 │   ├── research_cache.rb     # File-based research cache (24h TTL)
 │   ├── rss_generator.rb      # RSS 2.0 feed
 │   └── logger.rb             # Structured logging
+├── docs/
+│   └── pronunciation.md      # PLS format guide & IPA reference
 ├── scripts/
 │   ├── orchestrator.rb       # Legacy pipeline entry point
 │   ├── run.sh                # launchd wrapper
