@@ -80,7 +80,7 @@ ruby bin/podgen <command> [options]
 | `podgen generate <podcast>` | Run the full pipeline (news: research → script → TTS → assembly; language: RSS → trim → transcribe → assembly) |
 | `podgen scrap <podcast>` | Remove last episode and its history entry |
 | `podgen rss <podcast>` | Generate RSS feed from existing episodes |
-| `podgen publish <podcast>` | Publish podcast to Cloudflare R2 via rclone |
+| `podgen publish <podcast>` | Publish to Cloudflare R2 via rclone (`--lingq` for LingQ) |
 | `podgen list` | List available podcasts with titles |
 | `podgen test <name>` | Run a standalone test (research, hn, rss, tts, etc.) |
 | `podgen schedule <podcast>` | Install a daily launchd scheduler |
@@ -92,6 +92,7 @@ ruby bin/podgen <command> [options]
 | `-v, --verbose` | Verbose output |
 | `-q, --quiet` | Suppress terminal output (errors still shown, log file gets full detail) |
 | `--dry-run` | Run pipeline without API calls or file output — validates config and shows what would happen |
+| `--lingq` | Enable LingQ upload (generate) or publish to LingQ (publish) |
 | `-V, --version` | Print version |
 | `-h, --help` | Show help |
 
@@ -124,6 +125,12 @@ podgen publish ruby_world
 
 # Dry-run publish (see what would sync)
 podgen --dry-run publish ruby_world
+
+# Publish episodes to LingQ (bulk upload with tracking)
+podgen publish lahko_noc --lingq
+
+# Preview what would be uploaded to LingQ
+podgen publish lahko_noc --lingq --dry-run
 
 # Run a component test
 podgen test hn
@@ -300,7 +307,14 @@ Set `type: language` in `## Podcast` and configure `## Audio` in `podcasts/<name
 
 ### LingQ Upload
 
-The language pipeline can automatically upload episodes to [LingQ](https://www.lingq.com/) as lessons. Add a `## LingQ` section to your guidelines.md and set `LINGQ_API_KEY` in your `.env`:
+Upload language pipeline episodes to [LingQ](https://www.lingq.com/) as lessons. Add a `## LingQ` section to your guidelines.md and set `LINGQ_API_KEY` in your `.env`.
+
+Two ways to upload:
+
+1. **During generation**: `podgen generate lahko_noc --lingq` — uploads the newly generated episode
+2. **Bulk publish**: `podgen publish lahko_noc --lingq` — uploads all un-uploaded episodes from the episodes directory
+
+The publish command tracks uploads in `output/<podcast>/lingq_uploads.yml` (keyed by collection ID), so running it again skips already-uploaded episodes. Switching `collection` in your config uploads to the new collection without losing previous tracking.
 
 ```markdown
 ## LingQ
@@ -418,7 +432,7 @@ podgen/
 │   │   ├── generate_command.rb # Pipeline dispatcher (news or language)
 │   │   ├── language_pipeline.rb # Language pipeline
 │   │   ├── rss_command.rb    # RSS feed generation
-│   │   ├── publish_command.rb # Publish to Cloudflare R2
+│   │   ├── publish_command.rb # Publish to Cloudflare R2 or LingQ
 │   │   ├── list_command.rb   # List available podcasts
 │   │   ├── test_command.rb   # Run test scripts
 │   │   └── schedule_command.rb # Install launchd scheduler

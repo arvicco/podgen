@@ -103,8 +103,8 @@ module PodgenCLI
       # --- Save transcript ---
       save_transcript(episode, transcript, base_name)
 
-      # --- Phase 7: LingQ Upload (if enabled) ---
-      upload_to_lingq(episode, @reconciled_text || transcript, output_path)
+      # --- Phase 7: LingQ Upload (if enabled via --lingq flag) ---
+      upload_to_lingq(episode, @reconciled_text || transcript, output_path) if @options[:lingq]
 
       # --- Phase 8: Record history ---
       @history.record!(

@@ -8,7 +8,7 @@ module PodgenCLI
     "generate"  => ["Run the full podcast pipeline",       "cli/generate_command",  "GenerateCommand"],
     "scrap"     => ["Remove last episode and history",     "cli/scrap_command",     "ScrapCommand"],
     "rss"       => ["Generate RSS feed for a podcast",     "cli/rss_command",       "RssCommand"],
-    "publish"   => ["Publish podcast to Cloudflare R2",    "cli/publish_command",   "PublishCommand"],
+    "publish"   => ["Publish to Cloudflare R2 or LingQ",    "cli/publish_command",   "PublishCommand"],
     "stats"     => ["Show podcast statistics",             "cli/stats_command",     "StatsCommand"],
     "validate"  => ["Validate podcast config and output",  "cli/validate_command",  "ValidateCommand"],
     "list"      => ["List available podcasts",             "cli/list_command",      "ListCommand"],
@@ -28,7 +28,7 @@ module PodgenCLI
       opts.separator "  generate <podcast>             Run the full pipeline (news or language)"
       opts.separator "  scrap <podcast>                Remove last episode files + history entry"
       opts.separator "  rss <podcast>                  Generate RSS feed"
-      opts.separator "  publish <podcast>              Publish to Cloudflare R2"
+      opts.separator "  publish <podcast>              Publish to Cloudflare R2 (--lingq for LingQ)"
       opts.separator "  stats <podcast> | --all        Show podcast statistics"
       opts.separator "  validate <podcast> | --all     Validate config and output"
       opts.separator "  list                           List available podcasts"
@@ -56,6 +56,7 @@ module PodgenCLI
       opts.on("-v", "--verbose", "Verbose output") { options[:verbosity] = :verbose }
       opts.on("-q", "--quiet",   "Suppress terminal output (errors still shown)") { options[:verbosity] = :quiet }
       opts.on("--dry-run", "Validate config, skip API calls and file output") { options[:dry_run] = true }
+      opts.on("--lingq", "Enable LingQ upload (generate) or publish to LingQ (publish)") { options[:lingq] = true }
       opts.on("-V", "--version", "Print version and exit") do
         puts "podgen #{VERSION}"
         return 0
