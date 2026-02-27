@@ -77,9 +77,51 @@ class PodcastConfig
     @base_url ||= podcast_section[:base_url]
   end
 
-  # Extracts image from ## Podcast section (for RSS feed artwork)
+  # Podcast cover filename (for RSS feed artwork)
+  # Reads from ## Image → cover, falls back to ## Podcast → image
+  def cover
+    @cover ||= image_section[:cover] || podcast_section[:image]
+  end
+
+  # Backward-compatible alias — delegates to cover
   def image
-    @image ||= podcast_section[:image]
+    @image ||= cover
+  end
+
+  # Base image path for per-episode title-overlay cover generation
+  # Reads from ## Image, falls back to ## LingQ → base_image
+  # Returns :auto when configured as auto, resolved path otherwise
+  def cover_base_image
+    @cover_base_image ||= image_section[:base_image] || lingq_config&.dig(:base_image)
+  end
+
+  # Static fallback cover image path (fully resolved)
+  # Reads from ## Image → cover, falls back to ## LingQ → image
+  def cover_static_image
+    @cover_static_image ||= begin
+      if image_section[:cover]
+        resolve_path(image_section[:cover])
+      elsif lingq_config&.dig(:image)
+        lingq_config[:image] # already resolved by parse_lingq_section
+      end
+    end
+  end
+
+  # Font/text options hash for CoverAgent
+  # Reads from ## Image, falls back to ## LingQ values
+  def cover_options
+    @cover_options ||= begin
+      opts = {}
+      src = image_section.any? ? image_section : (lingq_config || {})
+      opts[:font] = src[:font] if src[:font]
+      opts[:font_color] = src[:font_color] if src[:font_color]
+      opts[:font_size] = src[:font_size] if src[:font_size]
+      opts[:text_width] = src[:text_width] if src[:text_width]
+      opts[:gravity] = src[:text_gravity] if src[:text_gravity]
+      opts[:x_offset] = src[:text_x_offset] if src[:text_x_offset]
+      opts[:y_offset] = src[:text_y_offset] if src[:text_y_offset]
+      opts
+    end
   end
 
   # Returns path to pronunciation.pls if it exists in the podcast directory, nil otherwise
@@ -98,15 +140,27 @@ class PodcastConfig
     @transcription_language ||= audio_section[:language] || extract_heading("Transcription Language")
   end
 
-  # Extracts skip_intro from ## Audio (new) or ## Skip Intro (legacy)
+  # Extracts skip from ## Audio (new) or ## Skip Intro (legacy)
   # Returns Float or nil if not configured
-  def skip_intro
-    @skip_intro ||= begin
-      val = audio_section[:skip_intro]
+  def skip
+    @skip ||= begin
+      val = audio_section[:skip]
       return val if val
       val = extract_heading("Skip Intro")
       val ? val.to_f : nil
     end
+  end
+
+  # Extracts cut from ## Audio section
+  # Returns Float or nil if not configured
+  def cut
+    @cut ||= audio_section[:cut]
+  end
+
+  # Extracts autotrim from ## Audio section
+  # Returns true or nil
+  def autotrim
+    @autotrim ||= audio_section[:autotrim]
   end
 
   # Parses engines from ## Audio (new) or ## Transcription Engine (legacy)
@@ -130,10 +184,10 @@ class PodcastConfig
     config && config[:collection] && ENV["LINGQ_API_KEY"] && !ENV["LINGQ_API_KEY"].empty?
   end
 
-  # Cover generation enabled if base_image is configured and exists on disk
+  # Cover generation enabled if base_image is configured (via ## Image or ## LingQ) and exists on disk
   def cover_generation_enabled?
-    config = lingq_config
-    config && config[:base_image] && File.exist?(config[:base_image])
+    bi = cover_base_image
+    bi && File.exist?(bi)
   end
 
   def queue_topics
@@ -220,6 +274,11 @@ class PodcastConfig
     @audio_section ||= parse_audio_section(guidelines)
   end
 
+  # Memoized parse of ## Image section
+  def image_section
+    @image_section ||= parse_image_section(guidelines)
+  end
+
   # Parses ## Podcast key-value list: name, type, author, language (with sub-items)
   def parse_podcast_section(text)
     match = text.match(/^## Podcast\s*\n(.*?)(?=^## |\z)/m)
@@ -259,7 +318,7 @@ class PodcastConfig
     config
   end
 
-  # Parses ## Audio key-value list: engine (with sub-items), language, target_language, skip_intro
+  # Parses ## Audio key-value list: engine (with sub-items), language, target_language, skip, cut
   def parse_audio_section(text)
     match = text.match(/^## Audio\s*\n(.*?)(?=^## |\z)/m)
     return {} unless match
@@ -279,12 +338,18 @@ class PodcastConfig
           else
             current_key = nil
             case key
-            when "skip_intro"
-              config[:skip_intro] = value.to_f
+            when "skip"
+              config[:skip] = value.to_f
+            when "cut"
+              config[:cut] = value.to_f
+            when "autotrim"
+              config[:autotrim] = true
             else
               config[key.to_sym] = value
             end
           end
+        elsif item.strip == "autotrim"
+          config[:autotrim] = true
         end
       elsif current_key == "engine" && line.match?(/^\s+- \S/)
         entry = line.strip.sub(/^- /, "").strip
@@ -293,6 +358,37 @@ class PodcastConfig
       end
     end
 
+    config
+  end
+
+  # Parses ## Image key-value list: cover, base_image, font, font_color, etc.
+  def parse_image_section(text)
+    match = text.match(/^## Image\s*\n(.*?)(?=^## |\z)/m)
+    return {} unless match
+
+    config = {}
+    match[1].each_line do |line|
+      if line.match?(/^- \S/)
+        item = line.strip.sub(/^- /, "")
+        if item.include?(":")
+          key, value = item.split(":", 2)
+          key = key.strip
+          value = value.strip
+          case key
+          when "cover"        then config[:cover] = value
+          when "image"        then config[:image] = value
+          when "base_image"   then config[:base_image] = resolve_path(value)
+          when "font"         then config[:font] = value
+          when "font_color"   then config[:font_color] = value
+          when "font_size"    then config[:font_size] = value.to_i
+          when "text_width"   then config[:text_width] = value.to_i
+          when "text_gravity"  then config[:text_gravity] = value
+          when "text_x_offset" then config[:text_x_offset] = value.to_i
+          when "text_y_offset" then config[:text_y_offset] = value.to_i
+          end
+        end
+      end
+    end
     config
   end
 
@@ -433,10 +529,49 @@ class PodcastConfig
       # Sub-item: "  - value" (indented under a key with colon)
       elsif current_key && line.match?(/^\s+- \S/)
         value = line.strip.sub(/^- /, "")
-        sources[current_key] << value
+        sources[current_key] << parse_source_item(current_key, value)
       end
     end
 
     sources.empty? ? default : sources
+  end
+
+  # Parses inline key-value options from a source sub-item.
+  # "https://example.com/feed skip: 38 cut: 10" → { url: "https://...", skip: 38.0, cut: 10.0 }
+  # "https://example.com/feed autotrim" → { url: "https://...", autotrim: true }
+  # "https://example.com/feed" → "https://example.com/feed" (plain string, backward compatible)
+  # Only applies to "rss" sources; other sources return the value as-is.
+  def parse_source_item(source_key, value)
+    return value unless source_key == "rss"
+
+    # Check for inline options: "URL key: val ..." or "URL flag ..."
+    # Split on whitespace before "key:" or known bare flags (autotrim)
+    parts = value.split(/\s+(?=\w+:|\bautotrim\b)/, -1)
+    return value if parts.length == 1
+
+    url = parts.shift
+    options = {}
+    parts.each do |part|
+      # Handle bare flags (no colon)
+      if part.strip == "autotrim"
+        options[:autotrim] = true
+        next
+      end
+      k, v = part.split(":", 2)
+      next unless k && v
+      k = k.strip
+      v = v.strip
+      case k
+      when "skip" then options[:skip] = v.to_f
+      when "cut" then options[:cut] = v.to_f
+      when "autotrim" then options[:autotrim] = true
+      when "base_image" then options[:base_image] = resolve_path(v)
+      when "image" then options[:image] = v
+      end
+    end
+
+    return url if options.empty?
+
+    { url: url }.merge(options)
   end
 end

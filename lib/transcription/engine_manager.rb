@@ -22,19 +22,20 @@ module Transcription
 
     # Single engine: returns { text:, segments:, speech_start:, speech_end:, cleaned: }
     # Comparison mode (2+ engines): returns { primary:, all: { "open" => {...}, ... }, errors: {}, reconciled: }
-    def transcribe(audio_path)
+    # Optional captions: plain text from YouTube auto-captions (used as reference)
+    def transcribe(audio_path, captions: nil)
       if @engine_codes.length == 1
         result = build_engine(@engine_codes.first).transcribe(audio_path)
-        result[:cleaned] = run_cleanup(result[:text])
+        result[:cleaned] = run_cleanup(result[:text], captions: captions)
         result
       else
-        transcribe_comparison(audio_path)
+        transcribe_comparison(audio_path, captions: captions)
       end
     end
 
     private
 
-    def transcribe_comparison(audio_path)
+    def transcribe_comparison(audio_path, captions: nil)
       results = {}
       errors = {}
 
@@ -76,10 +77,12 @@ module Transcription
         reconciled: nil
       }
 
-      # Reconcile if 2+ engines succeeded
-      if results.size >= 2
+      # Reconcile if 2+ sources available (engines + optional captions)
+      texts = results.transform_values { |r| r[:text] }
+      texts["captions"] = captions if captions
+
+      if texts.size >= 2
         begin
-          texts = results.transform_values { |r| r[:text] }
           comparison[:reconciled] = build_reconciler.reconcile(texts)
         rescue => e
           log("Reconciliation failed (non-fatal): #{e.message}")
@@ -89,8 +92,8 @@ module Transcription
       comparison
     end
 
-    def run_cleanup(text)
-      build_reconciler.cleanup(text)
+    def run_cleanup(text, captions: nil)
+      build_reconciler.cleanup(text, captions: captions)
     rescue => e
       log("Cleanup failed (non-fatal): #{e.message}")
       nil

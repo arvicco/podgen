@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
 require "open3"
+require "optparse"
 require "yaml"
 require "fileutils"
 
 root = File.expand_path("../..", __dir__)
 
 require_relative File.join(root, "lib", "podcast_config")
+require_relative File.join(root, "lib", "cli", "rss_command")
 
 module PodgenCLI
   class PublishCommand
@@ -14,8 +16,10 @@ module PodgenCLI
 
     def initialize(args, options)
       @options = options
-      @options[:lingq] = true if args.delete("--lingq")
-      @options[:dry_run] = true if args.delete("--dry-run")
+      OptionParser.new do |opts|
+        opts.on("--lingq", "Publish to LingQ instead of R2") { @options[:lingq] = true }
+        opts.on("--dry-run", "Show what would be published") { @options[:dry_run] = true }
+      end.parse!(args)
       @podcast_name = args.shift
     end
 
@@ -34,6 +38,9 @@ module PodgenCLI
       @config = PodcastConfig.new(@podcast_name)
       @config.load_env!
 
+      # Regenerate RSS feed before publishing
+      regenerate_rss
+
       if @options[:lingq]
         publish_to_lingq
       else
@@ -42,6 +49,12 @@ module PodgenCLI
     end
 
     private
+
+    def regenerate_rss
+      rss_opts = { verbosity: @options[:verbosity] }
+      rss = RssCommand.new([@podcast_name], rss_opts)
+      rss.run
+    end
 
     def publish_to_r2
       unless rclone_available?
@@ -145,7 +158,7 @@ module PodgenCLI
 
       pending.each do |ep|
         title, description, transcript = parse_transcript(ep[:transcript_path])
-        image_path = find_episode_cover(ep[:base_name]) || generate_cover_image(title, lc)
+        image_path = find_episode_cover(ep[:base_name]) || generate_cover_image(title, description: description)
 
         puts "  uploading: #{ep[:base_name]} — \"#{title}\"" unless @options[:verbosity] == :quiet
 
@@ -230,32 +243,25 @@ module PodgenCLI
       covers.first
     end
 
-    def generate_cover_image(title, lingq_config)
-      return lingq_config[:image] unless @config.cover_generation_enabled?
+    def generate_cover_image(title, description: nil)
+      return @config.cover_static_image unless @config.cover_generation_enabled?
+
+      base_image = @config.cover_base_image
 
       cover_path = File.join(Dir.tmpdir, "podgen_cover_publish_#{Process.pid}.jpg")
-
-      options = {}
-      options[:font] = lingq_config[:font] if lingq_config[:font]
-      options[:font_color] = lingq_config[:font_color] if lingq_config[:font_color]
-      options[:font_size] = lingq_config[:font_size] if lingq_config[:font_size]
-      options[:text_width] = lingq_config[:text_width] if lingq_config[:text_width]
-      options[:gravity] = lingq_config[:text_gravity] if lingq_config[:text_gravity]
-      options[:x_offset] = lingq_config[:text_x_offset] if lingq_config[:text_x_offset]
-      options[:y_offset] = lingq_config[:text_y_offset] if lingq_config[:text_y_offset]
 
       agent = CoverAgent.new
       agent.generate(
         title: title,
-        base_image: lingq_config[:base_image],
+        base_image: base_image,
         output_path: cover_path,
-        options: options
+        options: @config.cover_options
       )
 
       cover_path
     rescue => e
       $stderr.puts "  Warning: cover generation failed: #{e.message} (using static image)" if @options[:verbosity] == :verbose
-      lingq_config[:image]
+      @config.cover_static_image
     end
 
     def cleanup_cover(image_path)

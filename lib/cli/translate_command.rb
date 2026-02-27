@@ -14,13 +14,13 @@ module PodgenCLI
   class TranslateCommand
     def initialize(args, options)
       @options = options
-      @options[:dry_run] = true if args.delete("--dry-run")
       @last_n = nil
       @lang_filter = nil
 
       OptionParser.new do |opts|
         opts.on("--last N", Integer, "Only translate the N most recent episodes") { |n| @last_n = n }
         opts.on("--lang LANG", "Only translate to this language (e.g. it)") { |l| @lang_filter = l }
+        opts.on("--dry-run", "Show what would be translated") { @options[:dry_run] = true }
       end.parse!(args)
 
       @podcast_name = args.shift

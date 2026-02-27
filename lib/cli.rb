@@ -39,7 +39,7 @@ module PodgenCLI
       opts.separator ""
       opts.separator "Pipelines (configured via ## Type in guidelines.md):"
       opts.separator "  news      Research topics, write script, TTS, assemble MP3 (default)"
-      opts.separator "  language  Download from RSS (or --file), trim music, transcribe, assemble MP3"
+      opts.separator "  language  Download from RSS, --file, or --url (YouTube), transcribe, assemble MP3"
       opts.separator ""
       opts.separator "Transcription engines (## Transcription Engine in guidelines.md):"
       opts.separator "  open      OpenAI Whisper / gpt-4o-transcribe (default)"
@@ -92,7 +92,12 @@ module PodgenCLI
     _, require_path, class_name = entry
     require_relative require_path
 
-    cmd = PodgenCLI.const_get(class_name).new(argv, options)
+    begin
+      cmd = PodgenCLI.const_get(class_name).new(argv, options)
+    rescue OptionParser::ParseError => e
+      $stderr.puts "#{command_name}: #{e.message}"
+      return 2
+    end
     cmd.run
   end
 end

@@ -22,7 +22,8 @@ class RSSSource
   def research(topics, exclude_urls: Set.new)
     findings = []
 
-    @feeds.each do |feed_url|
+    @feeds.each do |feed_entry|
+      feed_url = feed_entry.is_a?(Hash) ? feed_entry[:url] : feed_entry
       items = fetch_feed(feed_url)
       items.each do |item|
         next if exclude_urls.include?(item[:url])
@@ -51,10 +52,22 @@ class RSSSource
   def fetch_episodes(exclude_urls: Set.new)
     episodes = []
 
-    @feeds.each do |feed_url|
+    @feeds.each do |feed_entry|
+      # Support both plain URL strings and hashes with options
+      feed_url, feed_opts = if feed_entry.is_a?(Hash)
+        [feed_entry[:url], feed_entry]
+      else
+        [feed_entry, {}]
+      end
+
       items = fetch_feed_episodes(feed_url)
       items.each do |item|
         next if exclude_urls.include?(item[:audio_url])
+        item[:skip] = feed_opts[:skip] if feed_opts[:skip]
+        item[:cut] = feed_opts[:cut] if feed_opts[:cut]
+        item[:autotrim] = feed_opts[:autotrim] if feed_opts[:autotrim]
+        item[:base_image] = feed_opts[:base_image] if feed_opts[:base_image]
+        item[:image] = feed_opts[:image] if feed_opts[:image]
         episodes << item
       end
     end

@@ -325,7 +325,8 @@ class TestStatsValidate < Minitest::Test
         - groq
       - language: sl
       - target_language: Slovenian
-      - skip_intro: 30
+      - skip: 30
+      - autotrim: true
     MD
 
     fake_file(File.join(pod, "cover.jpg"), "x" * 80_000)

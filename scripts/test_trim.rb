@@ -12,7 +12,7 @@
 #
 # Output (in output/trim_test/):
 #   1_original.mp3         — raw download
-#   2_after_skip_intro.mp3 — after fixed skip_intro cut
+#   2_after_skip.mp3       — after fixed skip cut
 #   3_trimmed.mp3          — after reconciliation-based outro trim
 #   3_tail.mp3             — the trimmed tail (should be pure music)
 
@@ -76,18 +76,18 @@ puts "  Duration: #{dur.round(1)}s"
 puts "  Saved: #{original}"
 
 # --- Phase 2: Skip intro ---
-skip = config.skip_intro
+skip = config.skip
 audio_path = original
 if skip && skip > 0
   puts "\n=== Phase 2: Skip fixed intro (#{skip}s) ==="
-  after_skip = File.join(OUTPUT_DIR, "2_after_skip_intro.mp3")
+  after_skip = File.join(OUTPUT_DIR, "2_after_skip.mp3")
   assembler.extract_segment(original, after_skip, skip, dur)
   dur2 = assembler.probe_duration(after_skip)
   puts "  Duration: #{dur.round(1)}s -> #{dur2.round(1)}s"
   puts "  Saved: #{after_skip}"
   audio_path = after_skip
 else
-  puts "\n=== Phase 2: No skip_intro configured, skipping ==="
+  puts "\n=== Phase 2: No skip configured, skipping ==="
 end
 
 # --- Phase 3: Transcribe with all engines ---

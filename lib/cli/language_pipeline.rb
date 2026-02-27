@@ -12,6 +12,8 @@ require_relative File.join(root, "lib", "transcription", "engine_manager")
 require_relative File.join(root, "lib", "audio_assembler")
 require_relative File.join(root, "lib", "agents", "lingq_agent")
 require_relative File.join(root, "lib", "agents", "cover_agent")
+require_relative File.join(root, "lib", "agents", "description_agent")
+require_relative File.join(root, "lib", "youtube_downloader")
 
 module PodgenCLI
   class LanguagePipeline
@@ -24,16 +26,23 @@ module PodgenCLI
       @options = options
       @dry_run = options[:dry_run] || false
       @local_file = options[:file]
+      @youtube_url = options[:url]
       @file_title = options[:title]
       @logger = logger
       @history = history
       @today = today
       @temp_files = []
+      @youtube_captions = nil
     end
 
     def run
       pipeline_start = Time.now
       logger.log("Language pipeline started#{@dry_run ? ' (DRY RUN)' : ''}")
+
+      if @options[:image] == "thumb" && !@youtube_url
+        $stderr.puts "Error: --image thumb is only valid with --url (YouTube)"
+        return 1
+      end
 
       # --- Phase 1 + 2: Get episode and source audio ---
       if @local_file
@@ -41,6 +50,8 @@ module PodgenCLI
         episode = build_local_episode(@local_file, @file_title)
         logger.log("Local file: \"#{episode[:title]}\" (#{@local_file})")
         logger.phase_end("Local File")
+
+        return 1 if already_processed?(episode)
 
         if @dry_run
           logger.log("[dry-run] Skipping transcription, assembly, and history")
@@ -53,14 +64,58 @@ module PodgenCLI
         end
 
         source_audio_path = File.expand_path(@local_file)
+      elsif @youtube_url
+        if @dry_run
+          logger.log("[dry-run] YouTube URL: #{@youtube_url}")
+          logger.log("[dry-run] Skipping download, transcription, assembly, and history")
+          total_time = (Time.now - pipeline_start).round(2)
+          summary = "[dry-run] Config validated, YouTube URL provided — no API calls"
+          logger.log("Total pipeline time: #{total_time}s")
+          logger.log(summary)
+          puts summary unless @options[:verbosity] == :quiet
+          return 0
+        end
+
+        logger.phase_start("YouTube")
+        downloader = YouTubeDownloader.new(logger: logger)
+        metadata = downloader.fetch_metadata(@youtube_url)
+        episode = build_youtube_episode(metadata)
+        logger.log("YouTube video: \"#{episode[:title]}\" (#{metadata[:duration]}s)")
+        logger.phase_end("YouTube")
+
+        return 1 if already_processed?(episode)
+
+        logger.phase_start("Download Audio")
+        source_audio_path = downloader.download_audio(@youtube_url)
+        @temp_files << source_audio_path
+        logger.log("Downloaded YouTube audio: #{(File.size(source_audio_path) / (1024.0 * 1024)).round(2)} MB")
+        logger.phase_end("Download Audio")
+
+        # Download thumbnail (always — used as fallback or via --image thumb)
+        thumb_path = downloader.download_thumbnail(@youtube_url)
+        if thumb_path
+          @temp_files << thumb_path
+          @youtube_thumbnail = thumb_path
+        end
+
+        # Fetch captions in target language (non-fatal)
+        caption_lang = @config.transcription_language
+        if caption_lang
+          @youtube_captions = downloader.fetch_captions(@youtube_url, language: caption_lang)
+        end
       else
         logger.phase_start("Fetch Episode")
-        episode = fetch_next_episode
+        episode = fetch_next_episode(force: @options[:force])
         unless episode
           logger.error("No new episodes found in RSS feeds")
           return 1
         end
+        episode[:title] = @file_title if @file_title
         logger.log("Selected episode: \"#{episode[:title]}\" (#{episode[:audio_url]})")
+        # Stash per-feed image config for resolve_episode_cover
+        @current_episode_feed_base_image = episode.delete(:base_image)
+        feed_image = episode.delete(:image)
+        @current_episode_image_none = (feed_image == "none")
         logger.phase_end("Fetch Episode")
 
         if @dry_run
@@ -79,32 +134,55 @@ module PodgenCLI
         logger.phase_end("Download Audio")
       end
 
-      # --- Phase 2b: Skip intro (--skip-intro for local files, config for RSS) ---
-      skip_intro = @local_file ? @options[:skip_intro] : @config.skip_intro
-      if skip_intro && skip_intro > 0
+      # --- Phase 2b: Skip intro (CLI flag → per-feed config → ## Audio config) ---
+      skip = @options[:skip] || episode[:skip] || @config.skip
+      if skip && skip > 0
         assembler = AudioAssembler.new(logger: logger)
         total = assembler.probe_duration(source_audio_path)
         skipped_path = File.join(Dir.tmpdir, "podgen_skipped_#{Process.pid}.mp3")
         @temp_files << skipped_path
-        assembler.extract_segment(source_audio_path, skipped_path, skip_intro, total)
-        logger.log("Skipped intro: #{skip_intro}s (#{total.round(1)}s → #{(total - skip_intro).round(1)}s)")
+        assembler.extract_segment(source_audio_path, skipped_path, skip, total)
+        logger.log("Skipped intro: #{skip}s (#{total.round(1)}s → #{(total - skip).round(1)}s)")
         source_audio_path = skipped_path
+      end
+
+      # --- Phase 2c: Cut outro (CLI flag → per-feed config → ## Audio config) ---
+      cut = @options[:cut] || episode[:cut] || @config.cut
+      if cut && cut > 0
+        assembler ||= AudioAssembler.new(logger: logger)
+        total = assembler.probe_duration(source_audio_path)
+        keep = total - cut
+        if keep > 0
+          cut_path = File.join(Dir.tmpdir, "podgen_cut_#{Process.pid}.mp3")
+          @temp_files << cut_path
+          assembler.trim_to_duration(source_audio_path, cut_path, keep)
+          logger.log("Cut outro: #{cut}s (#{total.round(1)}s → #{keep.round(1)}s)")
+          source_audio_path = cut_path
+        else
+          logger.log("Warning: cut #{cut}s exceeds audio duration #{total.round(1)}s — skipping")
+        end
       end
 
       # --- Phase 3: Transcribe full audio ---
       logger.phase_start("Transcription")
       assembler ||= AudioAssembler.new(logger: logger)
       base_name = @config.episode_basename(@today)
-      result = transcribe_audio(source_audio_path)
+      result = transcribe_audio(source_audio_path, captions: @youtube_captions)
       logger.phase_end("Transcription")
 
+      # --- Phase 3b: Clean or generate episode description ---
+      clean_or_generate_description(episode, @reconciled_text || result[:text])
+
       # --- Phase 4: Trim outro via reconciled text + Groq word timestamps ---
-      if @reconciled_text && @groq_words&.any?
+      autotrim = @options[:autotrim] || episode[:autotrim] || @config.autotrim
+      if autotrim && @reconciled_text && @groq_words&.any?
         logger.phase_start("Trim Outro")
         source_audio_path = trim_outro(assembler, source_audio_path, base_name)
         logger.phase_end("Trim Outro")
-      else
+      elsif autotrim
         logger.log("Skipping outro trim (requires 2+ engines with groq)")
+      else
+        logger.log("Skipping outro trim (autotrim not enabled)")
       end
 
       # --- Phase 5: Build transcript ---
@@ -124,12 +202,14 @@ module PodgenCLI
       # --- Save transcript ---
       save_transcript(episode, transcript, base_name)
 
-      # --- Save custom cover image (if --image provided) ---
-      if @options[:image]
-        ext = File.extname(@options[:image])
+      # --- Save episode cover ---
+      @current_episode_description = episode[:description]
+      cover_source = resolve_episode_cover(episode[:title])
+      if cover_source
+        ext = File.extname(cover_source)
         cover_dest = File.join(@config.episodes_dir, "#{base_name}_cover#{ext}")
-        FileUtils.cp(File.expand_path(@options[:image]), cover_dest)
-        logger.log("Custom cover saved: #{cover_dest}")
+        FileUtils.cp(cover_source, cover_dest)
+        logger.log("Episode cover saved: #{cover_dest}")
       end
 
       # --- Phase 7: LingQ Upload (if enabled via --lingq flag) ---
@@ -186,14 +266,37 @@ module PodgenCLI
       }
     end
 
-    def fetch_next_episode
+    def build_youtube_episode(metadata)
+      title = @file_title || metadata[:title]
+
+      {
+        title: title,
+        description: metadata[:description].to_s,
+        audio_url: metadata[:url],
+        source_path: nil,
+        pub_date: Time.now,
+        link: metadata[:url]
+      }
+    end
+
+    def already_processed?(episode)
+      return false if @options[:force] || @dry_run
+      return false unless @history.recent_urls.include?(episode[:audio_url])
+
+      logger.log("Warning: Already processed within lookback window: #{episode[:audio_url]}")
+      $stderr.puts "Already processed: \"#{episode[:title]}\" — use --force to re-process"
+      true
+    end
+
+    def fetch_next_episode(force: false)
       rss_feeds = @config.sources["rss"]
       unless rss_feeds.is_a?(Array) && rss_feeds.any?
         raise "Language pipeline requires RSS sources in guidelines.md (## Sources → - rss:)"
       end
 
       source = RSSSource.new(feeds: rss_feeds, logger: logger)
-      episodes = source.fetch_episodes(exclude_urls: @history.recent_urls)
+      exclude = force ? Set.new : @history.recent_urls
+      episodes = source.fetch_episodes(exclude_urls: exclude)
 
       if episodes.empty?
         logger.log("No episodes with audio enclosures found")
@@ -204,7 +307,7 @@ module PodgenCLI
       episodes.first
     end
 
-    def transcribe_audio(audio_path)
+    def transcribe_audio(audio_path, captions: nil)
       language = @config.transcription_language
       raise "Language pipeline requires ## Transcription Language in guidelines.md" unless language
 
@@ -215,7 +318,7 @@ module PodgenCLI
         target_language: @config.target_language,
         logger: logger
       )
-      result = manager.transcribe(audio_path)
+      result = manager.transcribe(audio_path, captions: captions)
 
       if engine_codes.length > 1
         # Comparison mode — stash per-engine results for save_transcript and outro trim
@@ -317,6 +420,22 @@ module PodgenCLI
       return false if shorter.length < MIN_PREFIX
 
       longer.start_with?(shorter)
+    end
+
+    def clean_or_generate_description(episode, transcript)
+      agent = DescriptionAgent.new(logger: logger)
+
+      # Clean title (all sources)
+      episode[:title] = agent.clean_title(title: episode[:title])
+
+      # Clean or generate description
+      if episode[:description].to_s.strip.empty?
+        episode[:description] = agent.generate(title: episode[:title], transcript: transcript)
+      else
+        episode[:description] = agent.clean(title: episode[:title], description: episode[:description])
+      end
+    rescue => e
+      logger.log("Warning: Description processing failed: #{e.message} (non-fatal, keeping original)")
     end
 
     def download_audio(url)
@@ -423,16 +542,10 @@ module PodgenCLI
       end
 
       logger.phase_start("LingQ Upload")
-      lc = @config.lingq_config.dup
-      lc[:image] = File.expand_path(@options[:image]) if @options[:image]
-      lc[:base_image] = File.expand_path(@options[:base_image]) if @options[:base_image]
+      lc = @config.lingq_config
       language = @config.transcription_language
 
-      image_path = if @options[:image]
-                     File.expand_path(@options[:image])
-                   else
-                     generate_cover_image(episode[:title], lc)
-                   end
+      image_path = resolve_episode_cover(episode[:title])
 
       agent = LingQAgent.new(logger: logger)
       lesson_id = agent.upload(
@@ -488,36 +601,56 @@ module PodgenCLI
       logger.log("Recorded LingQ upload: #{base_name} → lesson #{lesson_id}")
     end
 
+    # Resolves the episode cover image path using the priority chain:
+    # 1. --image PATH → static file
+    # 2. --image thumb → YouTube thumbnail
+    # 3. Per-feed image: none → YouTube thumbnail fallback
+    # 4. --base-image PATH → title overlay on file
+    # 5. Per-feed base_image: PATH → title overlay on file
+    # 6. ## Image base_image: PATH → title overlay on file (via cover_generation_enabled?)
+    # 7. YouTube thumbnail → fallback
+    # 8. nil → no cover
+    def resolve_episode_cover(title)
+      if @options[:image]
+        if @options[:image] == "thumb"
+          @youtube_thumbnail
+        else
+          File.expand_path(@options[:image])
+        end
+      elsif @current_episode_image_none
+        @youtube_thumbnail
+      elsif @options[:base_image]
+        generate_cover_image(title, File.expand_path(@options[:base_image])) || @youtube_thumbnail
+      elsif @current_episode_feed_base_image
+        generate_cover_image(title, @current_episode_feed_base_image) || @youtube_thumbnail
+      elsif @config.cover_generation_enabled?
+        generate_cover_image(title) || @youtube_thumbnail
+      else
+        @youtube_thumbnail
+      end
+    end
+
     # Generates a per-episode cover image with the title overlaid on the base image.
-    # Returns the generated image path, or falls back to the static image path.
-    def generate_cover_image(title, lingq_config)
-      base_image = lingq_config[:base_image]
-      return lingq_config[:image] unless base_image && File.exist?(base_image)
+    # Returns the generated image path, or nil on failure.
+    def generate_cover_image(title, base_image = nil)
+      base_image ||= @config.cover_base_image
+      return nil unless base_image && File.exist?(base_image)
 
       cover_path = File.join(Dir.tmpdir, "podgen_cover_#{Process.pid}.jpg")
       @temp_files << cover_path
 
-      options = {}
-      options[:font] = lingq_config[:font] if lingq_config[:font]
-      options[:font_color] = lingq_config[:font_color] if lingq_config[:font_color]
-      options[:font_size] = lingq_config[:font_size] if lingq_config[:font_size]
-      options[:text_width] = lingq_config[:text_width] if lingq_config[:text_width]
-      options[:gravity] = lingq_config[:text_gravity] if lingq_config[:text_gravity]
-      options[:x_offset] = lingq_config[:text_x_offset] if lingq_config[:text_x_offset]
-      options[:y_offset] = lingq_config[:text_y_offset] if lingq_config[:text_y_offset]
-
       agent = CoverAgent.new(logger: logger)
       agent.generate(
         title: title,
-        base_image: lingq_config[:base_image],
+        base_image: base_image,
         output_path: cover_path,
-        options: options
+        options: @config.cover_options
       )
 
       cover_path
     rescue => e
-      logger.log("Warning: Cover generation failed: #{e.message} (falling back to static image)")
-      lingq_config[:image]
+      logger.log("Warning: Cover generation failed: #{e.message} (falling back)")
+      nil
     end
 
     def cleanup_temp_files

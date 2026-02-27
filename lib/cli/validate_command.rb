@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "optparse"
 require "yaml"
 require "date"
 
@@ -13,7 +14,10 @@ module PodgenCLI
 
     def initialize(args, options)
       @options = options
-      @all = args.delete("--all")
+      @all = false
+      OptionParser.new do |opts|
+        opts.on("--all", "Validate all podcasts") { @all = true }
+      end.parse!(args)
       @podcast_name = args.shift
     end
 

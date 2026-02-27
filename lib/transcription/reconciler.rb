@@ -26,11 +26,11 @@ module Transcription
     # Single-engine: clean up grammar, fix obvious errors, regularize punctuation
     # Input: raw transcript text string
     # Output: cleaned text string
-    def cleanup(text)
+    def cleanup(text, captions: nil)
       raise ArgumentError, "Text is empty" if text.to_s.strip.empty?
 
       log("Cleaning up transcript with #{@model}")
-      call_api(cleanup_system_prompt, cleanup_user_prompt(text))
+      call_api(cleanup_system_prompt, cleanup_user_prompt(text, captions: captions))
     end
 
     private
@@ -109,6 +109,7 @@ module Transcription
         - Compare the transcripts sentence by sentence
         - For each sentence, pick the best rendering (best grammar, most accurate words, most natural phrasing)
         - If a sentence appears in only one engine and looks like a hallucination (repetitive, nonsensical, or out of context), omit it
+        - If a "captions" source is included, it contains auto-generated YouTube captions — these are lower quality (no punctuation, timing artifacts, possible errors) but can help as a tiebreaker when STT engines disagree on a word or phrase
 
         Cleanup rules:
         #{CLEANUP_RULES}
@@ -144,16 +145,32 @@ module Transcription
       PROMPT
     end
 
-    def cleanup_user_prompt(text)
-      <<~PROMPT
+    def cleanup_user_prompt(text, captions: nil)
+      prompt = <<~PROMPT
         Clean up this #{@language} transcript:
 
         #{text}
+      PROMPT
+
+      if captions
+        prompt += <<~CAPTIONS
+
+          ---
+
+          Reference: auto-generated YouTube captions (lower quality, use only to verify unclear words):
+
+          #{captions}
+        CAPTIONS
+      end
+
+      prompt += <<~INSTRUCTIONS
 
         ---
 
         Format with paragraphs and uniform dialog markers. Only output the transcript text, nothing else.
-      PROMPT
+      INSTRUCTIONS
+
+      prompt
     end
 
     def log_usage(message, elapsed)

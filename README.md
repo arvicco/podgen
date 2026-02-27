@@ -3,7 +3,7 @@
 Fully autonomous podcast generation pipeline with two modes:
 
 - **News pipeline**: Researches topics, writes a script, generates audio via TTS, and assembles a final MP3.
-- **Language pipeline**: Downloads episodes from RSS feeds (or processes local MP3 files via `--file`), strips intro/outro music, transcribes via OpenAI Whisper, and produces a clean MP3 + transcript.
+- **Language pipeline**: Downloads episodes from RSS feeds, local MP3 files (`--file`), or YouTube videos (`--url`), strips intro/outro music, transcribes via OpenAI Whisper, and produces a clean MP3 + transcript.
 
 Runs on a daily schedule with zero human involvement.
 
@@ -12,6 +12,7 @@ Runs on a daily schedule with zero human involvement.
 - **Ruby 3.2+** (tested with Ruby 4.0)
 - **Homebrew** (macOS)
 - **ffmpeg**: `brew install ffmpeg`
+- **yt-dlp** (for `--url` YouTube support): `brew install yt-dlp`
 - **API accounts** (news pipeline):
   - [Anthropic](https://console.anthropic.com/) — Claude API for script generation (also powers Claude Web Search source)
   - [Exa.ai](https://exa.ai/) — research/news search (default source)
@@ -50,6 +51,9 @@ BLUESKY_APP_PASSWORD=...      # Optional: https://bsky.app/settings/app-password
 SOCIALDATA_API_KEY=...        # Optional: https://socialdata.tools
 OPENAI_API_KEY=...            # Required for language pipeline (Whisper transcription)
 WHISPER_MODEL=gpt-4o-mini-transcribe  # Optional: default gpt-4o-mini-transcribe, alt whisper-1
+GROQ_API_KEY=...              # Optional: Groq transcription engine (language pipeline)
+LINGQ_API_KEY=...             # Optional: LingQ upload (language pipeline)
+YOUTUBE_BROWSER=chrome        # Optional: browser for yt-dlp cookie auth (default: chrome)
 ```
 
 ### Project root resolution
@@ -77,10 +81,13 @@ ruby bin/podgen <command> [options]
 
 | Command | Description |
 |---------|-------------|
-| `podgen generate <podcast>` | Run the full pipeline (news: research → script → TTS → assembly; language: RSS or `--file` → trim → transcribe → assembly) |
+| `podgen generate <podcast>` | Run the full pipeline (news: research → script → TTS → assembly; language: RSS, `--file`, or `--url` → trim → transcribe → assembly) |
+| `podgen translate <podcast>` | Translate existing episodes to new languages (`--last N`, `--lang xx`, `--dry-run`) |
 | `podgen scrap <podcast>` | Remove last episode (MP3 + transcript + cover), history entry, and LingQ tracking |
 | `podgen rss <podcast>` | Generate RSS feed from existing episodes |
 | `podgen publish <podcast>` | Publish to Cloudflare R2 via rclone (`--lingq` for LingQ) |
+| `podgen stats <podcast>` | Show podcast statistics (`--all` for summary table of all podcasts) |
+| `podgen validate <podcast>` | Validate config and output (`--all` for all podcasts) |
 | `podgen list` | List available podcasts with titles |
 | `podgen test <name>` | Run a standalone test (research, hn, rss, tts, etc.) |
 | `podgen schedule <podcast>` | Install a daily launchd scheduler |
@@ -138,6 +145,12 @@ podgen generate lahko_noc --file story.mp3 --lingq --image cover.png
 # Local MP3 with title-overlay cover generation
 podgen generate lahko_noc --file story.mp3 --lingq --base-image cover.jpg
 
+# Process a YouTube video through the language pipeline
+podgen generate lahko_noc --url "https://youtube.com/watch?v=abc123"
+
+# YouTube video with custom title and LingQ upload
+podgen generate lahko_noc --url "https://youtube.com/watch?v=abc123" --title "The Fox" --lingq
+
 # Publish episodes to LingQ (bulk upload with tracking)
 podgen publish lahko_noc --lingq
 
@@ -165,10 +178,11 @@ Output: `output/<podcast>/episodes/<name>-YYYY-MM-DD.mp3` (~10 min episode, ~12 
 
 ### Language pipeline
 
-1. Fetch the latest episode from configured RSS feeds (or use a local MP3 via `--file`)
-2. Download and strip intro/outro music
+1. Fetch the latest episode from configured RSS feeds, a local MP3 (`--file`), or a YouTube video (`--url`)
+2. Download and strip intro/outro music (outro auto-detection requires `--autotrim`)
 3. Transcribe via OpenAI Whisper (~15s for a 7-min episode)
-4. Assemble with custom intro/outro jingles + loudness normalization
+4. Clean episode title and description (or generate description from transcript for local files) via Claude Haiku
+5. Assemble with custom intro/outro jingles + loudness normalization
 
 Output: `output/<podcast>/episodes/<name>-YYYY-MM-DD.mp3` + `<name>-YYYY-MM-DD_transcript.md`
 
@@ -337,14 +351,48 @@ Set `type: language` in `## Podcast` and configure `## Audio` in `podcasts/<name
   - open
 - language: sl
 - target_language: Slovenian
-- skip_intro: 27
 ```
 
 - `type: language` in `## Podcast` activates this pipeline
 - `language` in `## Audio` is an ISO-639-1 code passed to the transcription engine
 - `engine` in `## Audio` selects transcription engines (`open`, `elab`, `groq`); multiple = comparison mode
-- `skip_intro` cuts N seconds from the start of downloaded RSS audio before processing
+- RSS feeds support per-feed `skip:` and `cut:` options (see below)
 - RSS sources must include feeds with audio enclosures
+
+#### Per-feed audio trimming
+
+RSS feeds can specify `skip:` (seconds to cut from start) and `cut:` (seconds to cut from end) inline:
+
+```markdown
+## Sources
+- rss:
+  - https://podcast.example.com/feed skip: 38 cut: 10
+  - https://other.example.com/feed skip: 5
+```
+
+CLI flags `--skip N` / `--cut N` override per-feed values. `skip`/`cut` in `## Audio` is used as a fallback if neither CLI flag nor per-feed config is set.
+
+#### Outro auto-detection (autotrim)
+
+Outro music auto-detection trims trailing music/silence by mapping reconciled transcript text back to Groq word-level timestamps. This feature is opt-in — enable it in any of three ways (same priority chain as `skip`/`cut`):
+
+1. **CLI flag**: `--autotrim`
+2. **Per-feed config**: `autotrim: true` inline with the RSS URL
+3. **`## Audio` section**: `- autotrim: true`
+
+```markdown
+## Sources
+- rss:
+  - https://podcast.example.com/feed skip: 38 autotrim: true
+
+## Audio
+- engine:
+  - open
+  - groq
+- autotrim: true
+```
+
+Requires 2+ transcription engines with `groq` included. Without `autotrim`, no outro detection runs even when engines support it.
 
 #### Local file import
 
@@ -359,11 +407,37 @@ podgen generate lahko_noc --file episode.mp3 --title "Custom Title"
 |------|-------------|
 | `--file PATH` | Local MP3 to process (skips RSS fetch) |
 | `--title TEXT` | Episode title (default: titleized filename, e.g. `my_story.mp3` → "My Story") |
-| `--skip-intro N` | Seconds to skip from the start (config's `skip_intro` only applies to RSS) |
-| `--image PATH` | Per-episode cover image (saved alongside MP3, used for LingQ — overrides cover generation) |
+| `--skip-intro N` | Seconds to skip from the start (overrides config) |
+| `--cut-outro N` | Seconds to cut from the end (overrides config) |
+| `--autotrim` | Enable outro auto-detection via word timestamps |
+| `--force` | Process even if already in history (skip dedup check) |
+| `--image PATH` | Per-episode cover image (overrides cover generation) |
 | `--base-image PATH` | Base image for title-overlay cover generation |
 
-The rest of the pipeline (transcription, outro trimming, assembly, LingQ upload) works identically. The file's name and size are recorded in history for dedup (survives file moves).
+The rest of the pipeline (transcription, outro trimming, assembly, LingQ upload) works identically. The file's name and size are recorded in history for dedup (survives file moves). Re-running the same `--file` command within the 7-day lookback window exits with a warning; use `--force` to re-process.
+
+#### YouTube video import
+
+Process any YouTube video through the language pipeline:
+
+```bash
+podgen generate lahko_noc --url "https://youtube.com/watch?v=abc123"
+podgen generate lahko_noc --url "https://youtube.com/watch?v=abc123" --title "Custom Title" --lingq
+```
+
+| Flag | Description |
+|------|-------------|
+| `--url URL` | YouTube video URL (downloads audio via yt-dlp, mutually exclusive with `--file`) |
+| `--title TEXT` | Episode title (default: YouTube video title) |
+| `--skip-intro N` | Seconds to skip from the start (overrides config) |
+| `--cut-outro N` | Seconds to cut from the end (overrides config) |
+| `--autotrim` | Enable outro auto-detection via word timestamps |
+| `--force` | Process even if already in history (skip dedup check) |
+| `--image PATH\|thumb` | Per-episode cover image, or `thumb` to use YouTube thumbnail |
+| `--base-image PATH` | Base image for title-overlay cover generation |
+
+The video thumbnail is always downloaded as a fallback. When `base_image` is configured (via `## Image` section, per-feed, or `--base-image`), title-overlay generation runs instead of using the raw thumbnail. Use `--image thumb` to explicitly prefer the YouTube thumbnail over generation, or `--image PATH` for a custom static image. YouTube auto-captions in the target language are automatically fetched (when available) and passed to the transcription reconciler as an additional reference source. The captions are treated as lower quality and used only as a tiebreaker when STT engines disagree. Requires `yt-dlp` on `$PATH` (`brew install yt-dlp`). Authentication uses browser cookies via `--cookies-from-browser` (default: Chrome, override with `YOUTUBE_BROWSER` env var). The canonical YouTube URL is recorded in history for dedup. Re-running the same `--url` command within the 7-day lookback window exits with a warning; use `--force` to re-process.
+
 - Place `intro.mp3` and `outro.mp3` in the podcast directory for custom jingles
 - Music detection uses bandpass filtering (300-3000 Hz) for intros and silence detection for outros
 - Default transcription model is `gpt-4o-mini-transcribe` (set `WHISPER_MODEL=whisper-1` for timestamps/segments)
@@ -381,29 +455,71 @@ Both modes track uploads in `output/<podcast>/lingq_uploads.yml` (keyed by colle
 
 Per-episode covers provided via `--image` are saved as `{base_name}_cover.{ext}` in the episodes directory. The publish command uses these per-episode covers when available, falling back to cover generation for episodes without one.
 
+### Cover Image Configuration
+
+Cover and title-overlay generation settings are configured in a dedicated `## Image` section in `guidelines.md`:
+
+```markdown
+## Image
+- cover: cover.jpg
+- base_image: base_cover.jpg
+- font: Noto Sans
+- font_color: white
+- font_size: 72
+- text_width: 900
+- text_gravity: south
+- text_x_offset: 0
+- text_y_offset: 50
+```
+
+| Key | Description |
+|-----|-------------|
+| `cover` | Podcast cover artwork filename (in `podcasts/<name>/`, copied to output by `podgen rss`) — replaces `image` in `## Podcast` |
+| `base_image` | Base image for per-episode title-overlay generation |
+| `font` | Font family for title text |
+| `font_color` | Font color |
+| `font_size` | Font size in points |
+| `text_width` | Max text width in pixels |
+| `text_gravity` | ImageMagick gravity (e.g. `south`, `center`) |
+| `text_x_offset` | Horizontal offset in pixels |
+| `text_y_offset` | Vertical offset in pixels |
+
+**Per-episode cover priority chain:**
+1. `--image PATH` — explicit static file override
+2. `--image thumb` — explicitly use YouTube auto-thumbnail (YouTube only; error for non-YouTube)
+3. Per-feed `image: none` — disables cover generation for this feed
+4. `--base-image PATH` — CLI override for title-overlay generation base
+5. Per-feed `base_image: path` in `## Sources`
+6. `## Image` section `base_image: path` → title-overlay generation
+7. YouTube thumbnail (auto-downloaded fallback, only for YouTube sources)
+8. `nil` — no cover
+
+Per-feed image overrides go inline with RSS URLs:
+
+```markdown
+## Sources
+- rss:
+  - https://podcast.example.com/feed base_image: special_cover.jpg
+  - https://other.example.com/feed image: none
+```
+
+Cover generation requires `imagemagick` + `librsvg` (`brew install imagemagick librsvg`) and fonts via `fontconfig`. Falls back to static cover or YouTube thumbnail on failure. Non-fatal.
+
+**Backward compatibility:** Image keys in `## LingQ` (`image`, `base_image`, `font`, `font_color`, `font_size`, `text_width`, `text_gravity`, `text_x_offset`, `text_y_offset`) continue to work as fallbacks. The `## Image` section takes priority when present.
+
+### LingQ Upload Configuration
+
 ```markdown
 ## LingQ
 - collection: 2629430
 - level: 3
 - tags: otroci, pravljice
 - status: private
-- image: lahko.jpg
-- base_image: lahko_no_text.jpg
-- font: Patrick Hand
-- font_color: #2B3A67
-- font_size: 126
-- text_width: 980
-- text_x_offset: 200
-- text_y_offset: 0
 ```
 
 - `collection` (required): LingQ collection/course ID
 - `level` / `tags` / `status`: lesson metadata
-- `image`: static cover image (relative to podcast directory)
-- `base_image`: if set, generates per-episode covers by overlaying the episode title onto this image via ImageMagick
-- `font`, `font_color`, `font_size`, `text_width`, `text_x_offset`, `text_y_offset`: text overlay styling
 - Upload is non-fatal — the pipeline continues if it fails
-- Cover generation requires `imagemagick` + `librsvg` (`brew install imagemagick librsvg`) and fonts via `fontconfig`; falls back to static `image` if unavailable
 
 ## Scheduling (launchd)
 
@@ -468,15 +584,14 @@ R2_BUCKET=podgen              # Your bucket name
 ### Usage
 
 ```bash
-# Generate feed, then publish
-podgen rss ruby_world
+# Publish (automatically regenerates RSS feed first)
 podgen publish ruby_world
 
 # Preview what would be synced
 podgen --dry-run publish ruby_world
 ```
 
-The publish command syncs only public-facing files: MP3 episodes, HTML transcripts, feed XML, and cover image. Internal files (history, research cache, markdown sources) are excluded.
+The publish command automatically regenerates RSS feeds before syncing, so you don't need to run `podgen rss` separately. It syncs only public-facing files: MP3 episodes, HTML transcripts, feed XML, and cover image. Internal files (history, research cache, markdown sources) are excluded. Use `podgen rss` separately if you only need to update the local feed (e.g. for local serving).
 
 No `rclone config` is needed — credentials are passed via environment variables.
 
@@ -489,42 +604,64 @@ podgen/
 ├── podcasts/<name>/
 │   ├── guidelines.md         # Podcast format, style, & sources config
 │   ├── queue.yml             # Fallback topic queue
-│   └── pronunciation.pls     # TTS pronunciation overrides (optional)
-├── assets/                   # (deprecated, use per-podcast intro/outro)
+│   ├── pronunciation.pls     # TTS pronunciation overrides (optional)
+│   └── .env                  # Per-podcast overrides (optional, gitignored)
 ├── lib/
-│   ├── cli.rb                # CLI dispatcher (OptionParser)
+│   ├── cli.rb                # CLI dispatcher (OptionParser + command registry)
 │   ├── cli/
 │   │   ├── version.rb        # PodgenCLI::VERSION
 │   │   ├── generate_command.rb # Pipeline dispatcher (news or language)
 │   │   ├── language_pipeline.rb # Language pipeline
+│   │   ├── translate_command.rb # Backfill translations for existing episodes
+│   │   ├── scrap_command.rb  # Remove last episode + history entry
 │   │   ├── rss_command.rb    # RSS feed generation
 │   │   ├── publish_command.rb # Publish to Cloudflare R2 or LingQ
+│   │   ├── stats_command.rb  # Show podcast statistics
+│   │   ├── validate_command.rb # Validate config and output
 │   │   ├── list_command.rb   # List available podcasts
 │   │   ├── test_command.rb   # Run test scripts
 │   │   └── schedule_command.rb # Install launchd scheduler
+│   ├── podcast_config.rb     # Resolves all paths, parses config from guidelines
 │   ├── source_manager.rb     # Multi-source research coordinator
+│   ├── research_cache.rb     # File-based research cache (24h TTL)
+│   ├── transcription/
+│   │   ├── base_engine.rb    # Shared base class (retries, logging)
+│   │   ├── openai_engine.rb  # OpenAI Whisper (engine: "open")
+│   │   ├── elevenlabs_engine.rb # ElevenLabs Scribe v2 (engine: "elab")
+│   │   ├── groq_engine.rb    # Groq hosted Whisper + word timestamps (engine: "groq")
+│   │   ├── engine_manager.rb # Orchestrator: single or parallel comparison mode
+│   │   └── reconciler.rb     # Claude reconciliation of multi-engine transcripts
 │   ├── agents/
 │   │   ├── topic_agent.rb    # Claude topic generation
 │   │   ├── research_agent.rb # Exa.ai search
 │   │   ├── script_agent.rb   # Claude script generation
 │   │   ├── tts_agent.rb      # ElevenLabs TTS (pronunciation dictionaries, hallucination trimming)
 │   │   ├── translation_agent.rb # Claude script translation
-│   │   └── transcription_agent.rb # OpenAI Whisper transcription
+│   │   ├── description_agent.rb # AI description cleanup/generation
+│   │   ├── transcription_agent.rb # Backward-compat shim → OpenAI engine
+│   │   ├── lingq_agent.rb    # LingQ lesson upload
+│   │   └── cover_agent.rb    # ImageMagick cover image generation
 │   ├── sources/
 │   │   ├── rss_source.rb     # RSS/Atom feed fetcher + episode fetcher
 │   │   ├── hn_source.rb      # Hacker News Algolia API
-│   │   └── claude_web_source.rb # Claude + web_search tool
-│   ├── audio_assembler.rb    # ffmpeg wrapper (assembly, music detection)
-│   ├── research_cache.rb     # File-based research cache (24h TTL)
-│   ├── rss_generator.rb      # RSS 2.0 feed
-│   └── logger.rb             # Structured logging
+│   │   ├── claude_web_source.rb # Claude + web_search tool
+│   │   ├── bluesky_source.rb # Bluesky AT Protocol post search
+│   │   └── x_source.rb       # X (Twitter) via SocialData.tools API
+│   ├── youtube_downloader.rb # yt-dlp wrapper (metadata, audio download, captions)
+│   ├── episode_history.rb    # Episode dedup (atomic YAML writes, 7-day lookback)
+│   ├── audio_assembler.rb    # ffmpeg wrapper (assembly, loudnorm, trim)
+│   ├── rss_generator.rb      # RSS 2.0 + iTunes + Podcasting 2.0 feed
+│   └── logger.rb             # Structured logging with phase timings
 ├── docs/
 │   └── pronunciation.md      # PLS format guide & IPA reference
 ├── scripts/
-│   ├── orchestrator.rb       # Legacy pipeline entry point
-│   ├── run.sh                # launchd wrapper
-│   └── generate_rss.rb       # Legacy RSS generator
-├── output/<name>/episodes/   # Final MP3s per podcast
+│   ├── serve.rb              # WEBrick static file server
+│   └── test_*.rb             # Diagnostic scripts
+├── output/<name>/
+│   ├── episodes/             # MP3s + transcripts/scripts
+│   ├── tails/                # Trimmed outro tails for review
+│   ├── history.yml           # Episode history for deduplication
+│   └── feed.xml              # RSS feed
 └── logs/<name>/              # Run logs per podcast
 ```
 
@@ -562,4 +699,5 @@ Each additional language adds ~$0.10 (translation) + ElevenLabs TTS cost.
 
 **Language pipeline** per episode:
 - OpenAI transcription (gpt-4o-mini-transcribe): ~$0.01-0.03 depending on duration
+- Claude Haiku (description cleanup/generation): ~$0.001
 - No TTS or research costs

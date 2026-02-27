@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "optparse"
 require "yaml"
 require "date"
 
@@ -11,7 +12,10 @@ module PodgenCLI
   class StatsCommand
     def initialize(args, options)
       @options = options
-      @all = args.delete("--all")
+      @all = false
+      OptionParser.new do |opts|
+        opts.on("--all", "Show stats for all podcasts") { @all = true }
+      end.parse!(args)
       @podcast_name = args.shift
     end
 

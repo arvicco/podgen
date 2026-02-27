@@ -22,16 +22,22 @@ module PodgenCLI
   class GenerateCommand
     def initialize(args, options)
       @options = options
-      @dry_run = options[:dry_run] || false
 
       OptionParser.new do |opts|
         opts.on("--file PATH", "Local audio file (language pipeline)") { |f| @options[:file] = f }
-        opts.on("--title TEXT", "Episode title (with --file)") { |t| @options[:title] = t }
-        opts.on("--skip-intro N", Float, "Seconds to skip from start (with --file)") { |n| @options[:skip_intro] = n }
-        opts.on("--image PATH", "Static cover image (with --file)") { |p| @options[:image] = p }
-        opts.on("--base-image PATH", "Base image for cover generation (with --file)") { |p| @options[:base_image] = p }
+        opts.on("--url URL", "YouTube video URL (language pipeline)") { |u| @options[:url] = u }
+        opts.on("--title TEXT", "Episode title (with --file or --url)") { |t| @options[:title] = t }
+        opts.on("--skip-intro N", "--skip N", Float, "Seconds to skip from start") { |n| @options[:skip] = n }
+        opts.on("--cut-outro N", "--cut N", Float, "Seconds to cut from end") { |n| @options[:cut] = n }
+        opts.on("--autotrim", "Enable outro auto-detection via word timestamps") { @options[:autotrim] = true }
+        opts.on("--force", "Process even if already in history (skip dedup check)") { @options[:force] = true }
+        opts.on("--image PATH", "Static cover image (with --file or --url)") { |p| @options[:image] = p }
+        opts.on("--base-image PATH", "Base image for cover generation (with --file or --url)") { |p| @options[:base_image] = p }
         opts.on("--lingq", "Enable LingQ upload during generation") { @options[:lingq] = true }
+        opts.on("--dry-run", "Validate config, skip API calls") { @options[:dry_run] = true }
       end.parse!(args)
+
+      @dry_run = @options[:dry_run] || false
 
       @podcast_name = args.shift
     end
@@ -86,9 +92,19 @@ module PodgenCLI
         guidelines = config.guidelines
         logger.log("Loaded guidelines (#{guidelines.length} chars)")
 
-        # --- Validate --file flag ---
+        # --- Validate --file and --url flags ---
         if @options[:file] && config.type != "language"
           $stderr.puts "Error: --file is only supported for language pipeline podcasts (type: language)"
+          return 1
+        end
+
+        if @options[:url] && config.type != "language"
+          $stderr.puts "Error: --url is only supported for language pipeline podcasts (type: language)"
+          return 1
+        end
+
+        if @options[:file] && @options[:url]
+          $stderr.puts "Error: --file and --url are mutually exclusive"
           return 1
         end
 
